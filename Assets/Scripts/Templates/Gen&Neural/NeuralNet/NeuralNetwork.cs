@@ -4,8 +4,8 @@ using System.Collections.Generic;
 
 public class NeuralNetwork
 {
-    List<NeuronLayer> layers = new List<NeuronLayer>();
-    int totalWeightsCount = 0;
+	List<NeuronLayer> layers = new List<NeuronLayer>();
+	int totalWeightsCount = 0;
     int inputsCount = 0;
 
     public int InputsCount
@@ -13,95 +13,95 @@ public class NeuralNetwork
         get { return inputsCount; }
     }
 
-    public NeuralNetwork()
-    {
-    }
+	public NeuralNetwork()
+	{
+	}
 
-    public bool AddNeuronLayer(int neuronsCount, float bias, float p)
-    {
-        if (layers.Count == 0)
-        {
-            Debug.LogError("Call AddFirstNeuronLayer(int inputsCount, float bias, float p) for the first layer.");
-            return false;
-        }
+	public bool AddNeuronLayer(int neuronsCount, float bias, float p)
+	{
+		if (layers.Count == 0)
+		{
+			Debug.LogError("Call AddFirstNeuronLayer(int inputsCount, float bias, float p) for the first layer.");
+			return false;
+		}
 
-        return AddNeuronLayer(layers[layers.Count - 1].OutputsCount, neuronsCount, bias, p);
-    }
+		return AddNeuronLayer(layers[layers.Count - 1].OutputsCount, neuronsCount, bias, p);
+	}
 
-    public bool AddFirstNeuronLayer(int inputsCount, float bias, float p)
-    {
-        if (layers.Count != 0)
-        {
-            Debug.LogError("Call AddNeuronLayer(int neuronCount, float bias, float p) for the rest of the layers.");
-            return false;
-        }
+ 	public bool AddFirstNeuronLayer(int inputsCount, float bias, float p)
+	{
+		if (layers.Count != 0)
+		{
+			Debug.LogError("Call AddNeuronLayer(int neuronCount, float bias, float p) for the rest of the layers.");
+			return false;
+		}
+		
+		this.inputsCount = inputsCount;
 
-        this.inputsCount = inputsCount;
+		return AddNeuronLayer(inputsCount, inputsCount, bias, p);
+	}
 
-        return AddNeuronLayer(inputsCount, inputsCount, bias, p);
-    }
+	private bool AddNeuronLayer(int inputsCount, int neuronsCount, float bias, float p)
+	{
+		if (layers.Count > 0 && layers[layers.Count - 1].OutputsCount != inputsCount)
+		{
+			Debug.LogError("Inputs Count must match outputs from previous layer.");
+			return false;
+		}
 
-    private bool AddNeuronLayer(int inputsCount, int neuronsCount, float bias, float p)
-    {
-        if (layers.Count > 0 && layers[layers.Count - 1].OutputsCount != inputsCount)
-        {
-            Debug.LogError("Inputs Count must match outputs from previous layer.");
-            return false;
-        }
+		NeuronLayer layer = new NeuronLayer(inputsCount, neuronsCount, bias, p);
 
-        NeuronLayer layer = new NeuronLayer(inputsCount, neuronsCount, bias, p);
+		totalWeightsCount += (inputsCount + 1) * neuronsCount;
 
-        totalWeightsCount += (inputsCount + 1) * neuronsCount;
+		layers.Add(layer);
 
-        layers.Add(layer);
-
-        return true;
-    }
+		return true;
+	}
 
     public int GetTotalWeightsCount()
     {
         return totalWeightsCount;
     }
 
-    public void SetWeights(float[] newWeights)
-    {
-        int fromId = 0;
+	public void SetWeights(float[] newWeights)
+	{
+		int fromId = 0;
 
-        for (int i = 0; i < layers.Count; i++)
-        {
-            fromId = layers[i].SetWeights(newWeights, fromId);
-        }
-    }
+		for (int i = 0; i < layers.Count; i++)
+		{
+			fromId = layers[i].SetWeights(newWeights, fromId);		
+		}
+	}
 
-    public float[] GetWeights()
-    {
-        float[] weights = new float[totalWeightsCount];
-        int id = 0;
+	public float[] GetWeights()
+	{
+		float[] weights = new float[totalWeightsCount];
+		int id = 0;
 
-        for (int i = 0; i < layers.Count; i++)
-        {
-            float[] ws = layers[i].GetWeights();
+		for (int i = 0; i < layers.Count; i++)
+		{
+			float[] ws = layers[i].GetWeights();
 
-            for (int j = 0; j < ws.Length; j++)
-            {
-                weights[id] = ws[j];
-                id++;
-            }
-        }
+			for (int j = 0; j < ws.Length; j++)
+			{
+				weights[id] = ws[j];
+				id++;
+			}
+		}
 
-        return weights;
-    }
+		return weights;
+	}
 
-    public float[] Synapsis(float[] inputs)
-    {
-        float[] outputs = null;
+	public float[] Synapsis(float[] inputs)
+	{
+		float[] outputs = null;
 
-        for (int i = 0; i < layers.Count; i++)
-        {
-            outputs = layers[i].Synapsis(inputs);
-            inputs = outputs;
-        }
+		for (int i = 0; i < layers.Count; i++)
+		{
+			outputs = layers[i].Synapsis(inputs);
+			inputs = outputs;
+		}
 
-        return outputs;
-    }
+		return outputs;
+	}
 }

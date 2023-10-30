@@ -31,13 +31,13 @@ public class SimulationScreen : MonoBehaviour
         timerTxt.text = string.Format(timerText, PopulationManager.Instance.IterationCount);
 
         if (string.IsNullOrEmpty(generationsCountText))
-            generationsCountText = generationsCountTxt.text;
+            generationsCountText = generationsCountTxt.text;   
         if (string.IsNullOrEmpty(bestFitnessText))
-            bestFitnessText = bestFitnessTxt.text;
+            bestFitnessText = bestFitnessTxt.text;   
         if (string.IsNullOrEmpty(avgFitnessText))
-            avgFitnessText = avgFitnessTxt.text;
+            avgFitnessText = avgFitnessTxt.text;   
         if (string.IsNullOrEmpty(worstFitnessText))
-            worstFitnessText = worstFitnessTxt.text;
+            worstFitnessText = worstFitnessTxt.text;   
 
         pauseBtn.onClick.AddListener(OnPauseButtonClick);
         stopBtn.onClick.AddListener(OnStopButtonClick);
@@ -46,13 +46,13 @@ public class SimulationScreen : MonoBehaviour
     void OnEnable()
     {
         if (string.IsNullOrEmpty(generationsCountText))
-            generationsCountText = generationsCountTxt.text;
+            generationsCountText = generationsCountTxt.text;   
         if (string.IsNullOrEmpty(bestFitnessText))
-            bestFitnessText = bestFitnessTxt.text;
+            bestFitnessText = bestFitnessTxt.text;   
         if (string.IsNullOrEmpty(avgFitnessText))
-            avgFitnessText = avgFitnessTxt.text;
+            avgFitnessText = avgFitnessTxt.text;   
         if (string.IsNullOrEmpty(worstFitnessText))
-            worstFitnessText = worstFitnessTxt.text;
+            worstFitnessText = worstFitnessTxt.text;   
 
         generationsCountTxt.text = string.Format(generationsCountText, 0);
         bestFitnessTxt.text = string.Format(bestFitnessText, 0);
