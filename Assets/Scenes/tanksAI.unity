@@ -180,6 +180,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 50912a5d3c9322a46afa5ca162962a5c, type: 3}
+--- !u!1 &93899 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 100000, guid: 50912a5d3c9322a46afa5ca162962a5c, type: 3}
+  m_PrefabInstance: {fileID: 93898}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &15774934
 GameObject:
   m_ObjectHideFlags: 0
@@ -539,6 +544,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 50912a5d3c9322a46afa5ca162962a5c, type: 3}
+--- !u!1 &96791712 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 100000, guid: 50912a5d3c9322a46afa5ca162962a5c, type: 3}
+  m_PrefabInstance: {fileID: 96791711}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &103753679
 GameObject:
   m_ObjectHideFlags: 0
@@ -5967,24 +5977,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TankPrefab: {fileID: 1915012411374756, guid: c7621d24efff4b04ca19cf2ef19a1af9, type: 3}
   MinePrefab: {fileID: 1712181699425504, guid: 74d6116ddc0b6ab4686323b873e69fb8, type: 3}
-  trees: []
+  trees:
+  - {fileID: 96791712}
+  - {fileID: 93899}
   PopulationCount: 30
-  MinesCount: 20
+  MinesCount: 30
   SceneHalfExtents: {x: 30, y: 0, z: 40}
   GenerationDuration: 20
   IterationCount: 1
   EliteCount: 2
-  MutationChance: 0.11
-  MutationRate: 0.06
+  MutationChance: 0.15
+  MutationRate: 0.05
   InputsCount: 7
-  HiddenLayers: 3
+  HiddenLayers: 6
   OutputsCount: 2
   NeuronsCountPerHL: 15
   Bias: -1
   P: 0.7
-  BadMinesAvgFitness: 50
-  TanksAvgFitness: 60
-  TreesAvgFitness: 70
+  BadMinesAvgFitness: 80
+  TanksAvgFitness: 125
+  TreesAvgFitness: 200
 --- !u!4 &1690210759
 Transform:
   m_ObjectHideFlags: 0

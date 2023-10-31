@@ -13,8 +13,12 @@ public class Tank : TankBase
         float angleToMine = GetAngleToObj(goodMine);
 
         inputs[0] = angleToMine;
-        
-        fitness += ((180 - Mathf.Abs(angleToMine)) / 180) * .001f * dt;
+
+        float goodMineMod = .001f;
+        if(stage >= Stages.BadMines) goodMineMod = .005f;
+        if(stage >= Stages.Tanks) goodMineMod = .01f;
+        if(stage >= Stages.Trees) goodMineMod = .025f;
+        fitness += ((180 - Mathf.Abs(angleToMine)) / 180) * goodMineMod * dt;
         
         inputs[1] = GetSqrDistToObj(goodMine);
         
@@ -60,12 +64,12 @@ public class Tank : TankBase
     {
         if (IsGoodMine(mine))
         {
-            fitness *= 2f;
+            fitness *= 3f;
             genome.fitness = fitness;
         }
         else if(stage >= Stages.BadMines)
         {
-            fitness -= 10f;
+            fitness -= 5f;
             if(fitness < 0) fitness = 0.00001f;
             genome.fitness = fitness;
         }
