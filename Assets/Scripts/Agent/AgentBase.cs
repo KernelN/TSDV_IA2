@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine;
 using IA.Math;
 using Stage = IA.Population.Stage;
 
@@ -9,6 +8,7 @@ namespace IA.Agent
     public class AgentBase
     {
         public Vec2 position;// { get; protected set; }
+        public int up;
         
         protected Vec2 nearFoodPos;
         protected AgentBase nearAlly;
@@ -19,6 +19,7 @@ namespace IA.Agent
         protected Stage stage;
         protected int generation;
         protected float fitness;
+        int lastDistToFood;
 
         public bool willSurvive { get; protected set; }
         public bool canReproduce { get; protected set; }
@@ -111,11 +112,59 @@ namespace IA.Agent
         }
         protected Vec2 GetDir(float[] cardinals)
         {
-            //If up/down is bigger than right/left, return up/down, else return right/left
-            if(Mathf.Abs(cardinals[0]) > Mathf.Abs(cardinals[1]))
-                return new Vec2(cardinals[0] > 0 ? 1 : -1, 0);
+            if (cardinals[4] > cardinals[0]
+                && cardinals[4] > cardinals[1]
+                && cardinals[4] > cardinals[2]
+                && cardinals[4] > cardinals[3])
+            {
+                return new Vec2(0, 0);
+            }
+            
+            bool up = cardinals[0] > cardinals[1];
+            bool right = cardinals[2] > cardinals[3];
+            
+            //Up or right
+            //Up or left
+            //Down or right
+            //Down or left
+            
+            Vec2 dir = new Vec2();
+            if(up && right)
+            {
+                if(cardinals[0] > cardinals[2])
+                    dir.y = this.up;
+                else
+                    dir.x = 1;
+            }
+            else if(up && !right)
+            {
+                if(cardinals[0] > cardinals[3])
+                    dir.y = this.up;
+                else
+                    dir.x = -1;
+            }
+            else if(!up && right)
+            {
+                if(cardinals[1] > cardinals[2])
+                    dir.y = -this.up;
+                else
+                    dir.x = 1;
+            }
             else
-                return new Vec2(0, cardinals[1] > 0 ? 1 : -1);
+            {
+                if(cardinals[1] > cardinals[3])
+                    dir.y = -this.up;
+                else
+                    dir.x = -1;
+            }
+            
+            return dir;
+        }
+        protected void DecreaseFitness(float decrease)
+        {
+            fitness -= decrease;
+            if (fitness < 0)
+                fitness = 0;
         }
         
         //Virtual / Abstract Methods
@@ -127,14 +176,24 @@ namespace IA.Agent
         {
             inputs.Clear();
             
-            inputs.Add(nearFoodPos.x);
-            inputs.Add(nearFoodPos.y);
+            Vec2 dist = nearFoodPos - position;
+            inputs.Add(dist.x);
+            inputs.Add(dist.y);
+            
+            int distMag = dist.SqrMagnitude();
+            if(lastDistToFood > distMag)
+                fitness += 2;
+            else
+                fitness *= .75f;
+            genome.fitness = fitness;
 
+            lastDistToFood = distMag;
+            
             if (stage >= Stage.Enemies)
             {
-                Vec2 pos = nearEnemy.position;
-                inputs.Add(pos.x);
-                inputs.Add(pos.y);
+                dist = nearEnemy.position - position;
+                inputs.Add(dist.x);
+                inputs.Add(dist.y);
             }
             else
             {
@@ -144,9 +203,9 @@ namespace IA.Agent
 
             if (stage >= Stage.Allies)
             {
-                Vec2 pos = nearAlly.position;
-                inputs.Add(pos.x);
-                inputs.Add(pos.y);
+                dist = nearAlly.position - position;
+                inputs.Add(dist.x);
+                inputs.Add(dist.y);
             }
             else
             {
@@ -165,7 +224,10 @@ namespace IA.Agent
             else
                 canReproduce = true;
             
-            fitness += 5;
+            lastDistToFood = int.MaxValue;
+            
+            //fitness += 5;
+            fitness *= 2;
             genome.fitness = fitness;
                 
             FoodTaken?.Invoke();

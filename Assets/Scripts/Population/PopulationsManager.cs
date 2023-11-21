@@ -4,6 +4,13 @@ using Random = UnityEngine.Random;
 
 namespace IA.Population
 {
+    [System.Serializable]
+    public class PopulationData
+    {
+        public GeneAlgo.Genome[] genomes;
+        public int stage;
+    }
+    
     public class PopulationsManager : MonoBehaviour
     {
         [SerializeField] Game.Map map;
@@ -53,38 +60,18 @@ namespace IA.Population
                 if(turnTimer < SecondsPerTurn) return;
                 
                 turnTimer -= SecondsPerTurn;
+                UpdateSimulation();
+            }
+            else
+            {
+                int turns = (int)(dt / SecondsPerTurn);
+                for (int i = 0; i < turns; i++)
+                {
+                    UpdateSimulation();
+                }
             }
             
             //THIS IS WRONG
-            for (int i = 0; i < TurnsPerSecond; i++)
-            {
-                pop1.Update();
-                pop2.Update();
-
-                Turn++;
-                if (Turn >= TurnsPerGeneration || map.food.Count == 0)
-                {
-                    Turn -= TurnsPerGeneration;
-                    if (Turn < 0) Turn = 0;
-                    
-                    CreateFood();
-                    if (!pop1.Epoch()) //needs to use survivors of other pop ASAP
-                    {
-                        Debug.Break();
-                        StopSimulation();
-                        return;
-                    }
-                    if (pop2.Epoch())
-                    {
-                        Debug.Break();
-                        StopSimulation();
-                        return;
-                    }
-                    
-                    GenerationChanged?.Invoke();
-                    //break;
-                }
-            }
             
             SimulationUpdated?.Invoke();
         }
@@ -115,7 +102,76 @@ namespace IA.Population
             // // Destroy all mines
             // DestroyFood();
         }
+        public void SavePopulations(string fileName)
+        {
+            PopulationData pop1Data = new PopulationData();
+            PopulationData pop2Data = new PopulationData();
+            
+            pop1Data.genomes = pop1.GetPopulation();
+            pop2Data.genomes = pop2.GetPopulation();
+            
+            pop1Data.stage = (int)pop1.Stage;
+            pop2Data.stage = (int)pop2.Stage;
+            
+            string dataPath = Application.persistentDataPath + "pop1Data_" + fileName + ".bin";
+            Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
+            
+            dataPath = Application.persistentDataPath + "pop2Data_" + fileName + ".bin";
+            Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop2Data, dataPath);
+        }
+        public void LoadPopulations(string fileName)
+        {
+            StartSimulation();
+            
+            PopulationData pop1Data = new PopulationData();
+            PopulationData pop2Data = new PopulationData();
+            
+            string dataPath = Application.persistentDataPath + "pop1Data_" + fileName + ".bin";
+            pop1Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
+            
+            dataPath = Application.persistentDataPath + "pop2Data_" + fileName + ".bin";
+            pop2Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
+            
+            pop1.Repopulate(pop1Data.genomes, (Stage)pop1Data.stage);
+            pop2.Repopulate(pop2Data.genomes, (Stage)pop2Data.stage);
+        }
+        void UpdateSimulation()
+        {
+            pop1.Update();
+            pop2.Update();
 
+            Turn++;
+            if (Turn >= TurnsPerGeneration || map.food.Count == 0)
+            {
+                Turn -= TurnsPerGeneration;
+                if (Turn < 0) Turn = 0;
+                    
+                CreateFood();
+                    
+                bool pop1Survived = pop1.Epoch();
+                bool pop2Survived = pop2.Epoch();
+                    
+                //If neither population survived, end
+                if (!(pop1Survived || pop2Survived)) 
+                {
+                    Debug.Break();
+                    StopSimulation();
+                    return;
+                }
+                    
+                if(!pop1Survived)
+                {
+                    pop1.Repopulate(pop2.GetRandomPopulation(), pop2.Stage);
+                }
+                else if(!pop2Survived)
+                {
+                    pop2.Repopulate(pop1.GetRandomPopulation(), pop1.Stage);
+                }
+                    
+                GenerationChanged?.Invoke();
+                //break;
+            }
+        }
         void CreateFood()
         {
             if (InitialPopulationCount > map.width)

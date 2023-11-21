@@ -32,7 +32,6 @@ namespace IA.Game
         List<SpriteController> food;
         List<SpriteController> pop1;
         List<SpriteController> pop2;
-        int foodCount;
         int agent1Count;
         int agent2Count;
 
@@ -45,6 +44,12 @@ namespace IA.Game
             popsManager.SimulationStarted += OnSimStart;
             popsManager.SimulationUpdated += OnSimUpdate;
             popsManager.GenerationChanged += OnNewGeneration;
+        }
+        void OnEnable()
+        {
+            if(data == null) return;
+            
+            OnNewGeneration();
         }
 
         //Methods
@@ -79,7 +84,6 @@ namespace IA.Game
             mapRenderer.position = new Vector3(data.width / 2, data.height / 2, 0);
             Camera.main.orthographicSize = data.height / 1.75f;
 
-            foodCount = data.food.Count;
             agent1Count = data.population1.Count;
             agent2Count = data.population2.Count;
 
@@ -106,13 +110,20 @@ namespace IA.Game
         }
         void OnSimUpdate()
         {
+            if(this.enabled == false) return;
             //Remove dead agents and empty food
-            int foodTaken = 1;
-            while (foodCount > data.food.Count)
+            if(data.foodTaken.Count > 0)
             {
-                food[data.foodTaken[^foodTaken]].sprite.enabled = false;
-                foodTaken++;
-                foodCount--;
+                for (int i = 0; i < data.food.Count; i++)
+                {
+                    food[i].t.position = new Vector3(data.food[i].x, data.food[i].y, 0);
+                }
+                for (int i = data.food.Count; i < data.foodTaken.Count + data.food.Count; i++)
+                {
+                    food[i].sprite.enabled = false;
+                }
+                
+                data.foodTaken.Clear();
             }
 
             while (agent1Count > data.population1.Count)
@@ -143,13 +154,8 @@ namespace IA.Game
         }
         void OnNewGeneration()
         {
+            if(this.enabled == false) return;
             //Remove dead agents and empty food
-            while (foodCount > data.food.Count)
-            {
-                food[foodCount - 1].sprite.enabled = false;
-                foodCount--;
-            }
-
             while (agent1Count > data.population1.Count)
             {
                 pop1[agent1Count - 1].sprite.enabled = false;
@@ -163,14 +169,13 @@ namespace IA.Game
             }
 
             //Add new agents and recover food
-            while (foodCount < data.food.Count)
+            while (food.Count < data.food.Count)
             {
-                if (food.Count > foodCount)
-                    food[foodCount - 1].sprite.enabled = true;
-                else
-                    food.Add(CreateSprite(foodPrefab, data.food[foodCount - 1]));
-
-                foodCount++;
+                food.Add(CreateSprite(foodPrefab, data.food[food.Count]));
+            }
+            for (int i = 0; i < data.food.Count; i++)
+            {
+                food[i].sprite.enabled = true;
             }
 
             while (agent1Count < data.population1.Count)
@@ -194,7 +199,7 @@ namespace IA.Game
             }
             
             //Update positions
-            for (int i = 0; i < foodCount; i++)
+            for (int i = 0; i < food.Count; i++)
             {
                 Vector3 pos = new Vector3(data.food[i].x, data.food[i].y, 0);
                 food[i].t.position = pos;

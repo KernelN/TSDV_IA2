@@ -32,7 +32,7 @@ namespace IA.NeuralNet
                 a += weights[i] * input[i];
             }
 
-            a += bias * weights[weights.Length - 1];
+            a += bias * weights[^1];
 
             return Sigmoid(a);
         }

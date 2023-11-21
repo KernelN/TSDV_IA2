@@ -2,7 +2,8 @@ namespace IA.Population
 {
     public enum Stage
     {
-        Food,
+        Base,
+        Hunger,
         Enemies,
         Allies,
         _Count

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace IA.GeneAlgo
 {
+    [System.Serializable]
     public class Genome
     {
         public float[] genome;
@@ -59,7 +60,52 @@ namespace IA.GeneAlgo
 
             return genomes;
         }
+        
+        public Genome[] GetRandomPopulation()
+        {
+            List<Genome> newPopulation = new List<Genome>();
+            
+            while (newPopulation.Count < population.Count)
+            {
+                NoFitnessCrossover(newPopulation);
+            }
 
+            return newPopulation.ToArray();
+        }
+        
+        public Genome[] Epoch(Genome[] oldGenomes, int eliteCount)
+        {
+            totalFitness = 0;
+
+            population.Clear();
+            newPopulation.Clear();
+
+            population.AddRange(oldGenomes);
+            population.Sort(HandleComparison);
+
+            foreach (Genome g in population)
+            {
+                totalFitness += g.fitness;
+            }
+
+            SelectElite(eliteCount);
+
+            while (newPopulation.Count < population.Count)
+            {
+                Crossover();
+            }
+
+            return newPopulation.ToArray();
+        }
+        
+        void SelectElite(int eliteCount)
+        {
+            for (int i = 0; i < eliteCount && newPopulation.Count < population.Count; i++)
+            {
+                newPopulation.Add(population[i]);
+            }
+        }
+        
         public Genome[] Epoch(Genome[] elites, Genome[] reproductiveGenomes)
         {
             totalFitness = 0;
@@ -87,9 +133,24 @@ namespace IA.GeneAlgo
                 Crossover();
             }
 
+            population = newPopulation;
             return newPopulation.ToArray();
         }
 
+        void NoFitnessCrossover(List<Genome> newPopulation)
+        {
+            Genome mom = population[Random.Range(0, population.Count)];
+            Genome dad = population[Random.Range(0, population.Count)];
+
+            Genome child1;
+            Genome child2;
+
+            Crossover(mom, dad, out child1, out child2, 2.0f);
+
+            newPopulation.Add(child1);
+            newPopulation.Add(child2);
+        }
+        
         void Crossover()
         {
             Genome mom = RouletteSelection();
@@ -104,8 +165,10 @@ namespace IA.GeneAlgo
             newPopulation.Add(child2);
         }
 
-        void Crossover(Genome mom, Genome dad, out Genome child1, out Genome child2)
+        void Crossover(Genome mom, Genome dad, out Genome child1, out Genome child2, float mutMod = 1.0f)
         {
+            float mutationRate = mutMod * this.mutationRate;
+            
             child1 = new Genome();
             child2 = new Genome();
 
@@ -118,12 +181,12 @@ namespace IA.GeneAlgo
             {
                 child1.genome[i] = mom.genome[i];
 
-                if (ShouldMutate())
+                if (ShouldMutate(mutMod))
                     child1.genome[i] += Random.Range(-mutationRate, mutationRate);
 
                 child2.genome[i] = dad.genome[i];
 
-                if (ShouldMutate())
+                if (ShouldMutate(mutMod))
                     child2.genome[i] += Random.Range(-mutationRate, mutationRate);
             }
 
@@ -141,16 +204,15 @@ namespace IA.GeneAlgo
             }
         }
 
-        bool ShouldMutate()
+        bool ShouldMutate(float mutMod = 1.0f)
         {
-            return Random.Range(0.0f, 1.0f) < mutationChance;
+            return Random.Range(0.0f, 1.0f) < mutationChance * mutMod;
         }
 
         int HandleComparison(Genome x, Genome y)
         {
             return x.fitness > y.fitness ? 1 : x.fitness < y.fitness ? -1 : 0;
         }
-
 
         public Genome RouletteSelection()
         {

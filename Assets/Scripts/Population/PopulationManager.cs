@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using IA.Agent;
 using IA.GeneAlgo;
@@ -14,6 +13,7 @@ namespace IA.Population
         [Header("Genetic")] 
         [Range(0,1)] public float MutationChance = 0.10f;
         [Range(0,1)] public float MutationRate = 0.01f;
+        [SerializeField, Min(1)] public int FirstStageElitePairs;
 
         [Header("Neural Network")] 
         [Min(1)] public int InputsCount = 4;
@@ -28,6 +28,7 @@ namespace IA.Population
         // public float TanksAvgFitness = 200;
         // public float TreesAvgFitness = 300;
 
+        public Stage Stage { get; protected set; }
 
         GeneticAlgorithm genAlg;
         Game.Map map;
@@ -35,11 +36,9 @@ namespace IA.Population
         List<Agent.AgentBase> populationControllers = new List<Agent.AgentBase>();
         List<Genome> population = new List<Genome>();
         List<NeuralNetwork> brains = new List<NeuralNetwork>();
-        List<Vec2> food = new List<Vec2>();
 
         bool isTeam1;
         int initialPopCount;
-        Stage stage;
 
         public int generation { get; private set; }
         public float bestFitness { get; private set; }
@@ -96,13 +95,16 @@ namespace IA.Population
         public void StopSimulation()
         {
             generation = 0;
-            stage = 0;
+            Stage = 0;
         }
 
         // Generate the random initial population
         void GenerateInitialPopulation()
         {
             generation = 0;
+            brains.Clear();
+            population.Clear();
+            populationControllers.Clear();
 
             // Destroy previous tanks (if there are any)
             // DestroyTanks();
@@ -121,10 +123,11 @@ namespace IA.Population
                 populationControllers.Add(CreateAgent(genome, brain));
                 
                 //Set agent
-                populationControllers[i].SetStage(stage);
+                populationControllers[i].SetStage(Stage);
                 populationControllers[i].SetMinAndMax
                     (new Vec2(0,0), new Vec2(map.width, map.height));
                 populationControllers[i].SetPosition(GetAgentFirstPos(i));
+                populationControllers[i].up = isTeam1 ? 1 : -1;
             }
             
             if(isTeam1)
@@ -164,22 +167,35 @@ namespace IA.Population
             avgFitness = getAvgFitness();
             worstFitness = getWorstFitness();
 
+            Genome[] newGenomes;
+            
             //Get elite and reproductive genomes
             List<Genome> eliteGenomes = new List<Genome>();
             List<Genome> reproGenomes = new List<Genome>();
-            for (int i = 0; i < populationControllers.Count; i++)
+            if (Stage >= Stage.Hunger)
             {
-                if(populationControllers[i].CanAdvanceGen())
-                    eliteGenomes.Add(population[i]);
-                if(populationControllers[i].canReproduce)
-                    reproGenomes.Add(population[i]);
+                //Check which ones survive and which ones reproduce
+                for (int i = 0; i < populationControllers.Count; i++)
+                {
+                    if (populationControllers[i].CanAdvanceGen())
+                        eliteGenomes.Add(population[i]);
+                    if (populationControllers[i].canReproduce)
+                        reproGenomes.Add(population[i]);
+                }
+                
+                if(eliteGenomes.Count < 2) return false;
+                
+                // Evolve each genome and create a new array of genomes
+                newGenomes = genAlg.Epoch(eliteGenomes.ToArray(), reproGenomes.ToArray());
             }
-            
-            // Evolve each genome and create a new array of genomes
-            Genome[] newGenomes;
-            newGenomes = genAlg.Epoch(eliteGenomes.ToArray(), reproGenomes.ToArray());
-
-            if(newGenomes.Length == 0) return false;
+            else
+            {
+                //Add everyone for reproduction
+                reproGenomes.AddRange(population);
+                
+                // Evolve each genome and create a new array of genomes
+                newGenomes = genAlg.Epoch(reproGenomes.ToArray(), FirstStageElitePairs*2);
+            }
             
             // Clear current population
             population.Clear();
@@ -198,8 +214,80 @@ namespace IA.Population
             // }
 
             // Add new population
+            
+            population.AddRange(newGenomes);
+            
+            
+            while (populationControllers.Count < population.Count)
+            {
+                // Create a new NeuralNetwork
+                NeuralNetwork brain = CreateBrain();
+                Genome genome = population[populationControllers.Count];
+                brain.SetWeights(genome.genome);
+                brains.Add(brain);
+                
+                AgentBase agent = CreateAgent(genome, brain);
+                populationControllers.Add(agent);
+            }
+
+            while (populationControllers.Count > population.Count)
+            {
+                brains.RemoveAt(populationControllers.Count-1);
+                populationControllers.RemoveAt(populationControllers.Count-1);
+            }
+
+            // Set the new genomes as each NeuralNetwork weights
+            for (int i = 0; i < population.Count; i++)
+            {
+                NeuralNetwork brain = brains[i];
+
+                brain.SetWeights(newGenomes[i].genome);
+
+                populationControllers[i].SetBrain(newGenomes[i], brain);
+                populationControllers[i].SetStage(Stage);
+                populationControllers[i].SetMinAndMax
+                           (new Vec2(0,0), new Vec2(map.width, map.height));
+                populationControllers[i].SetPosition(GetAgentFirstPos(i));
+                populationControllers[i].up = isTeam1 ? 1 : -1;
+            }
+            
+            if(isTeam1)
+                map.population1 = populationControllers;
+            else
+                map.population2 = populationControllers;
+
+            return true;
+        }
+
+        // Change population for a new one
+        public void Repopulate(Genome[] newGenomes, Stage stage)
+        {
+            generation = 0;
+            population.Clear();
+            
+            Stage = stage;
+
+            // Add new population
             population.AddRange(newGenomes);
 
+            while (populationControllers.Count < population.Count)
+            {
+                // Create a new NeuralNetwork
+                NeuralNetwork brain = CreateBrain();
+                Genome genome = population[populationControllers.Count];
+                brain.SetWeights(genome.genome);
+                brains.Add(brain);
+                
+                AgentBase agent = CreateAgent(genome, brain);
+                populationControllers.Add(agent);
+            }
+
+            while (populationControllers.Count > population.Count)
+            {
+                brains.RemoveAt(populationControllers.Count-1);
+                populationControllers.RemoveAt(populationControllers.Count-1);
+            }
+            
             // Set the new genomes as each NeuralNetwork weights
             for (int i = 0; i < population.Count; i++)
             {
@@ -210,16 +298,25 @@ namespace IA.Population
                 populationControllers[i].SetBrain(newGenomes[i], brain);
                 populationControllers[i].SetStage(stage);
                 populationControllers[i].SetMinAndMax
-                           (new Vec2(0,0), new Vec2(map.width, map.height));
+                    (new Vec2(0,0), new Vec2(map.width, map.height));
                 populationControllers[i].SetPosition(GetAgentFirstPos(i));
+                populationControllers[i].up = isTeam1 ? 1 : -1;
             }
             
             if(isTeam1)
                 map.population1 = populationControllers;
             else
                 map.population2 = populationControllers;
+        }
+        
+        public Genome[] GetRandomPopulation()
+        {
+            return genAlg.GetRandomPopulation();
+        }
 
-            return true;
+        public Genome[] GetPopulation()
+        {
+            return population.ToArray();
         }
 
         // Update the population

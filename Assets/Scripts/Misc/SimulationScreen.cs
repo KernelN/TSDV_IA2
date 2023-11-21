@@ -59,6 +59,8 @@ namespace IA.Game
         public Slider timerSlider;
         public Button pauseBtn;
         public Button stopBtn;
+        public InputField saveInput;
+        public Button saveBtn;
         public GameObject startConfigurationScreen;
 
         string timerText;
@@ -86,6 +88,7 @@ namespace IA.Game
 
             pauseBtn.onClick.AddListener(OnPauseButtonClick);
             stopBtn.onClick.AddListener(OnStopButtonClick);
+            saveBtn.onClick.AddListener(OnSaveButtonClick);
         }
         void OnEnable()
         {
@@ -121,6 +124,16 @@ namespace IA.Game
             this.gameObject.SetActive(false);
             startConfigurationScreen.SetActive(true);
             lastTurn = 0;
+        }
+        void OnSaveButtonClick()
+        {
+            if (saveInput.text.Length == 0 || saveInput.text == "")
+            {
+                Debug.LogError("INVALID SAVE NAME");
+                return;
+            }
+            
+            popsManager.SavePopulations(saveInput.text);
         }
     }
 }
