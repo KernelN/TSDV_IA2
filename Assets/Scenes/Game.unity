@@ -567,10 +567,6 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 6543422900532958959, guid: a38adf2796782c74591742be576af70a, type: 3}
-      propertyPath: m_Text
-      value: 
-      objectReference: {fileID: 0}
     - target: {fileID: 7144140341461030182, guid: a38adf2796782c74591742be576af70a, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -619,6 +615,10 @@ PrefabInstance:
       propertyPath: m_TargetGraphic
       value: 
       objectReference: {fileID: 1331783579}
+    - target: {fileID: 8026219881697086082, guid: a38adf2796782c74591742be576af70a, type: 3}
+      propertyPath: layouts.Array.size
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8457165805874990376, guid: a38adf2796782c74591742be576af70a, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

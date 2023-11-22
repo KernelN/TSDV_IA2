@@ -17,6 +17,8 @@ namespace IA.Game
             }
             
             Population.PopulationsManager.Instance.LoadPopulations(loadInput.text);
+            gameObject.SetActive(false);
+            simulationScreen.SetActive(true);
         }
         public void StartSimulation()
         {

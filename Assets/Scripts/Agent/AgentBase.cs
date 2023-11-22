@@ -181,10 +181,11 @@ namespace IA.Agent
             inputs.Add(dist.y);
             
             int distMag = dist.SqrMagnitude();
+            
             if(lastDistToFood > distMag)
-                fitness += 2;
-            else
-                fitness *= .75f;
+                fitness += .05f;
+            // else
+            //     fitness *= .9f;
             genome.fitness = fitness;
 
             lastDistToFood = distMag;
