@@ -932,32 +932,31 @@ MonoBehaviour:
   map:
     width: 100
     height: 100
-    foodTaken: 
     food: []
     population1: []
     population2: []
   TurnsPerGeneration: 125
   InitialPopulationCount: 20
   pop1:
-    MutationChance: 0.15
-    MutationRate: 0.05
-    FirstStageElitePairs: 1
+    MutationChance: 0.2
+    MutationRate: 0.1
+    FirstStageElitePairs: 2
     InputsCount: 6
-    OutputsCount: 5
-    HiddenLayers: 8
-    NeuronsCountPerHL: 12
-    Bias: -3.74
-    P: 0.617
+    OutputsCount: 7
+    HiddenLayers: 6
+    NeuronsCountPerHL: 15
+    Bias: -7
+    P: 0.8
   pop2:
-    MutationChance: 0.15
-    MutationRate: 0.05
-    FirstStageElitePairs: 1
+    MutationChance: 0.2
+    MutationRate: 0.1
+    FirstStageElitePairs: 2
     InputsCount: 6
-    OutputsCount: 5
-    HiddenLayers: 8
-    NeuronsCountPerHL: 12
-    Bias: -3.74
-    P: 0.617
+    OutputsCount: 7
+    HiddenLayers: 6
+    NeuronsCountPerHL: 15
+    Bias: -7
+    P: 0.8
 --- !u!4 &1500092832
 Transform:
   m_ObjectHideFlags: 0

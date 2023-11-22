@@ -20,7 +20,13 @@ namespace IA.Population
         [Min(1)] public int OutputsCount = 2;
         [Range(0,10)] public int HiddenLayers = 1;
         [Range(0,100)] public int NeuronsCountPerHL = 7;
+        [Tooltip("Multiplies each neuron (so the more neurons, bigger the effect).\n" +
+                 "The bigger the value, more outputs will be almost 0 or almost 1.\n" +
+                 "(The smaller the value, more outputs will be between 0-1)")]
         [Range(0,-10)] public float Bias = -1f;
+        [Tooltip("Divides(? each neuron (so the less neurons, bigger the effect).\n" +
+                 "The bigger the value, more outputs will be between 0-1.\n" +
+                 "(The smaller the value, more outputs will be almost 0 or almost 1)")]
         [Range(0.01f,1)] public float P = 0.5f;
 
         // [Header("Stages")] 
@@ -123,11 +129,7 @@ namespace IA.Population
                 populationControllers.Add(CreateAgent(genome, brain));
                 
                 //Set agent
-                populationControllers[i].SetStage(Stage);
-                populationControllers[i].SetMinAndMax
-                    (new Vec2(0,0), new Vec2(map.width, map.height));
-                populationControllers[i].SetPosition(GetAgentFirstPos(i));
-                populationControllers[i].up = isTeam1 ? 1 : -1;
+                SetAgent(i, false);
             }
             
             if(isTeam1)
@@ -169,6 +171,11 @@ namespace IA.Population
 
             Genome[] newGenomes;
             
+            for (int i = 0; i < populationControllers.Count; i++)
+            {
+                populationControllers[i].CalcFitness();
+            }
+            
             //Get elite and reproductive genomes
             List<Genome> eliteGenomes = new List<Genome>();
             List<Genome> reproGenomes = new List<Genome>();
@@ -197,6 +204,11 @@ namespace IA.Population
                 newGenomes = genAlg.Epoch(reproGenomes.ToArray(), FirstStageElitePairs*2);
             }
             
+            for (int i = 0; i < populationControllers.Count; i++)
+            {
+                populationControllers[i].AdvanceGen();
+            }
+            
             // Clear current population
             population.Clear();
 
@@ -214,7 +226,6 @@ namespace IA.Population
             // }
 
             // Add new population
-            
             population.AddRange(newGenomes);
             
             
@@ -243,12 +254,7 @@ namespace IA.Population
 
                 brain.SetWeights(newGenomes[i].genome);
 
-                populationControllers[i].SetBrain(newGenomes[i], brain);
-                populationControllers[i].SetStage(Stage);
-                populationControllers[i].SetMinAndMax
-                           (new Vec2(0,0), new Vec2(map.width, map.height));
-                populationControllers[i].SetPosition(GetAgentFirstPos(i));
-                populationControllers[i].up = isTeam1 ? 1 : -1;
+                SetAgent(i);
             }
             
             if(isTeam1)
@@ -295,12 +301,7 @@ namespace IA.Population
 
                 brain.SetWeights(newGenomes[i].genome);
 
-                populationControllers[i].SetBrain(newGenomes[i], brain);
-                populationControllers[i].SetStage(stage);
-                populationControllers[i].SetMinAndMax
-                    (new Vec2(0,0), new Vec2(map.width, map.height));
-                populationControllers[i].SetPosition(GetAgentFirstPos(i));
-                populationControllers[i].up = isTeam1 ? 1 : -1;
+                SetAgent(i);
             }
             
             if(isTeam1)
@@ -322,6 +323,8 @@ namespace IA.Population
         // Update the population
         public void Update()
         {
+            bool interactWithEnemies = Stage >= Stage.Enemies;
+            
             for (int i = 0; i < populationControllers.Count; i++)
             {
                 if(map.food.Count == 0) return;
@@ -332,12 +335,39 @@ namespace IA.Population
                 a.SetNearEnemy(GetEnemyPos(i));
 
                 int foodIndex = GetFood(i);
-                a.SetNearFoodPos(map.food[foodIndex]);
+                a.SetNearFoodPos(map.food[foodIndex], foodIndex);
 
                 void OnFoodTaken()
                 {
-                    map.food.RemoveAt(foodIndex);
-                    map.foodTaken.Add(foodIndex);
+                    //If can interact with enemies, don't eat, add agent to eaters list and hope for the best
+                    if (interactWithEnemies)
+                    {
+                        a.UnEat();
+                        List<AgentBase> list;
+
+                        if (map.foodTaken.TryGetValue(foodIndex, out list))
+                        {
+                            //If there's already 2 or more agents in the list, cell is overcrowded, return
+                            if(list.Count > 1)
+                                a.ReturnToLastPos();
+                            
+                            //else go to food
+                            else
+                                list.Add(a);
+                        }
+                        else 
+                        {
+                            list = new List<AgentBase> { a };
+                            map.foodTaken.TryAdd(foodIndex, list);
+                        }
+                    }
+
+                    //If CAN'T interact with enemies yet, eat food, and be happy
+                    else
+                    {
+                        map.foodTaken.TryAdd(foodIndex, new List<AgentBase> { a });
+                        map.food.RemoveAt(foodIndex);
+                    }
                 }
 
                 a.FoodTaken += OnFoodTaken;
@@ -346,6 +376,33 @@ namespace IA.Population
                 
                 a.FoodTaken -= OnFoodTaken;
             }
+        }
+
+        void SetAgent(int index, bool setBrain = true)
+        {
+            if(setBrain)
+                populationControllers[index].SetBrain(population[index], brains[index]);
+            
+            SetAgent(populationControllers[index]);
+            populationControllers[index].SetPosition(GetAgentFirstPos(index));
+        }
+        void SetAgent(AgentBase a)
+        {
+            a.SetStage(Stage);
+            a.SetMinAndMax(new Vec2(0,0), new Vec2(map.width, map.height));
+            a.up = isTeam1 ? 1 : -1;
+            a.isTeam1 = isTeam1;
+
+            a.Died += OnAgentDied;
+        }
+        
+        void OnAgentDied(AgentBase agent)
+        {
+            int index = populationControllers.IndexOf(agent);
+            
+            brains.RemoveAt(index);
+            population.RemoveAt(index);
+            populationControllers.RemoveAt(index);
         }
 
         #region Helpers

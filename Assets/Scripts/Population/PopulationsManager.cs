@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using IA.Agent;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -140,6 +142,108 @@ namespace IA.Population
             pop1.Update();
             pop2.Update();
 
+            //Manage food eating
+            while (map.foodTaken.Count > 0)
+            {
+                List<AgentBase> agents = map.foodTaken.Values.First();
+
+                //If there's only one agent, let it eat and be happy
+                if (agents.Count == 1)
+                {
+                    agents[0].ForceEat();
+                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    continue;
+                }
+
+                if (pop1.Stage < Stage.Enemies || pop2.Stage < Stage.Enemies)
+                {
+                    agents[0].ForceEat();
+                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    return;
+                }
+
+                //If they're not the same team, fight
+                if (agents[0].isTeam1 != agents[1].isTeam1)
+                {
+                    //If agent A flees...
+                    if (agents[0].willFleeAgainstEnemy)
+                    {
+                        //...and agent B flees too, nobody eats, nobody dies
+                        if (agents[1].willFleeAgainstEnemy)
+                        {
+                            agents[0].ReturnToLastPos();
+                            agents[1].ReturnToLastPos();
+                        }
+
+                        //...and agent B doesn't flee, agent B eats
+                        else
+                        {
+                            agents[0].ReturnToLastPos();
+                            agents[1].ForceEat();
+                        }
+                    }
+
+                    //If agent A doesn't flee...
+                    else
+                    {
+                        //...and agent B flees, agent A eats
+                        if (agents[1].willFleeAgainstEnemy)
+                        {
+                            agents[1].ReturnToLastPos();
+                            agents[0].ForceEat();
+                        }
+
+                        //...and agent B doesn't flee, somebody dies, somebody eats
+                        else
+                        {
+                            float survChance = Random.Range(0, 1f);
+
+                            if (survChance < 0.5f)
+                            {
+                                agents[0].Die();
+                                agents[1].ForceEat();
+                            }
+                            else
+                            {
+                                agents[1].Die();
+                                agents[0].ForceEat();
+                            }
+                        }
+                    }
+                }
+
+                //Else, share
+                else
+                {
+                    if (agents[0].willGiveFoodToAlly)
+                    {
+                        if (agents[1].willGiveFoodToAlly)
+                        {
+                            agents[0].ReturnToLastPos();
+                            agents[1].ReturnToLastPos();
+                        }
+                        else
+                        {
+                            agents[0].ReturnToLastPos();
+                            agents[1].ForceEat();
+                        }
+                    }
+                    else
+                    {
+                        if (agents[1].willGiveFoodToAlly)
+                        {
+                            agents[1].ReturnToLastPos();
+                            agents[0].ForceEat();
+                        }
+                        else
+                        {
+                            agents[0].ForceEat(.5f);
+                            agents[1].ForceEat(.5f);
+                        }
+                    }
+                }
+            }
+
             Turn++;
             if (Turn >= TurnsPerGeneration || map.food.Count == 0)
             {
@@ -183,7 +287,7 @@ namespace IA.Population
             if (map.food == null)
             {
                 map.food = new List<Math.Vec2>();
-                map.foodTaken = new List<int>();
+                map.foodTaken = new Dictionary<int, List<AgentBase>>();
             }
             else
             {
