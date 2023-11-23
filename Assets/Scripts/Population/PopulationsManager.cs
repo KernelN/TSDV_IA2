@@ -137,10 +137,10 @@ namespace IA.Population
             PopulationData pop1Data = new PopulationData();
             PopulationData pop2Data = new PopulationData();
             
-            string dataPath = Application.persistentDataPath + "pop1Data_" + fileName + ".bin";
+            string dataPath = Application.persistentDataPath + "_pop1Data_" + fileName + ".bin";
             pop1Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
             
-            dataPath = Application.persistentDataPath + "pop2Data_" + fileName + ".bin";
+            dataPath = Application.persistentDataPath + "_pop2Data_" + fileName + ".bin";
             pop2Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
             
             pop1.Repopulate(pop1Data.genomes, (Stage)pop1Data.stage);
