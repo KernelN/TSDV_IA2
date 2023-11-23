@@ -13,7 +13,9 @@ namespace IA.Population
         [Header("Genetic")] 
         [Range(0,1)] public float MutationChance = 0.10f;
         [Range(0,1)] public float MutationRate = 0.01f;
-        [SerializeField, Min(1)] public int FirstStageElitePairs;
+        [Min(1)] public int FirstStageElitePairs;
+        [Tooltip("This won't be for the traditional elites, but for the genomes that are stored in case of a restart")]
+        [Min(.1f)] public float MinEliteFitness = 1;
 
         [Header("Neural Network")] 
         [Min(1)] public int InputsCount = 4;
@@ -57,15 +59,21 @@ namespace IA.Population
         {
             float fitness = 0;
             Genome bestG = null;
-            foreach (Genome g in population)
+            for (int i = 0; i < population.Count; i++)
             {
+                Genome g = population[i];
                 if (fitness < g.fitness)
                 {
                     fitness = g.fitness;
+                    if(fitness < MinEliteFitness) continue; //only add agents with the minimum fitness
+                    if(!populationControllers[i].willSurvive) continue; //only add agents that ate
                     bestG = g;
                 }
             }
 
+            //If no genome was beyond min requirements, don't add it to the list
+            if(bestG == null) return fitness;
+            
             if(bestGenomes.Count < initialPopCount)
                 bestGenomes.Add(bestG);
             else
@@ -218,7 +226,9 @@ namespace IA.Population
                         reproGenomes.Add(population[i]);
                 }
                 
-                if(eliteGenomes.Count < 2) return false;
+                //If none will reproduce, check if someone will survive
+                if(reproGenomes.Count < 2)
+                    if(eliteGenomes.Count < 2) return false;
                 
                 // Evolve each genome and create a new array of genomes
                 newGenomes = genAlg.Epoch(eliteGenomes.ToArray(), reproGenomes.ToArray());
@@ -296,7 +306,23 @@ namespace IA.Population
         // Change population for a new one
         public void Repopulate()
         {
-            Repopulate(bestGenomes.ToArray(), Stage);
+            if (bestGenomes.Count > 0)
+            {
+                Genome[] newGenomes = new Genome[initialPopCount];
+                
+                int weightAmount = bestGenomes[0].genome.Length;
+                for (int i = 0; i < initialPopCount; i++)
+                {
+                    if(i < bestGenomes.Count) //this ones are the real deal, will reproduce
+                        newGenomes[i] = bestGenomes[i];
+                    else //this ones won't reproduce, as have fit 0, they're only fillers
+                        newGenomes[i] = new Genome(weightAmount); 
+                }
+                
+                Repopulate(genAlg.Epoch(newGenomes), Stage);
+            }
+            else //If there are no best ones, generate a completely new batch of agents
+                GenerateInitialPopulation();
         }
         public void Repopulate(Genome[] newGenomes, Stage stage)
         {
@@ -347,11 +373,6 @@ namespace IA.Population
             return genAlg.GetRandomPopulation();
         }
         
-        public Genome[] GetBest()
-        {
-            return genAlg.Epoch(bestGenomes.ToArray());
-        }
-
         public Genome[] GetPopulation()
         {
             return population.ToArray();

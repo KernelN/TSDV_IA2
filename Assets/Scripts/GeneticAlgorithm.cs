@@ -29,6 +29,12 @@ namespace IA.GeneAlgo
         {
             fitness = 0;
         }
+
+        public Genome(Genome other)
+        {
+            fitness = other.fitness;
+            genome = other.genome;
+        }
     }
 
     public class GeneticAlgorithm
@@ -88,7 +94,7 @@ namespace IA.GeneAlgo
                 totalFitness += g.fitness;
             }
 
-            while (newPopulation.Count < maxPopulation)
+            while (newPopulation.Count < population.Count)
             {
                 mutationChance *= 2;
                 Crossover();

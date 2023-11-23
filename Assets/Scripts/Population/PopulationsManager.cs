@@ -16,6 +16,8 @@ namespace IA.Population
     public class PopulationsManager : MonoBehaviour
     {
         [SerializeField] Game.Map map;
+        [SerializeField] int divineInterventionsPerAutosave = 10;
+        [SerializeField] bool autoSave;
         
         [Header("Population")]
         [SerializeField, Min(3)] int TurnsPerGeneration = 50;
@@ -86,6 +88,9 @@ namespace IA.Population
 
             pop1.StartSimulation(InitialPopulationCount, map, true);
             pop2.StartSimulation(InitialPopulationCount, map, false);
+            
+            if(autoSave)
+                SavePopulations("START");
 
             isRunning = true;
             
@@ -119,10 +124,10 @@ namespace IA.Population
             pop1Data.stage = (int)this.pop1.Stage;
             pop2Data.stage = (int)this.pop2.Stage;
             
-            string dataPath = Application.persistentDataPath + "pop1Data_" + fileName + ".bin";
+            string dataPath = Application.persistentDataPath + "_pop1Data_" + fileName + ".bin";
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
             
-            dataPath = Application.persistentDataPath + "pop2Data_" + fileName + ".bin";
+            dataPath = Application.persistentDataPath + "_pop2Data_" + fileName + ".bin";
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop2Data, dataPath);
         }
         public void LoadPopulations(string fileName)
@@ -266,9 +271,11 @@ namespace IA.Population
                 if (!(pop1Survived || pop2Survived))
                 {
                     divineInterventions++;
-                    SavePopulations("DivineIntervention_N" + divineInterventions, pop1Gs, pop2Gs);
-                    pop1.Repopulate(pop1.GetBest(), pop1.Stage);
-                    pop2.Repopulate(pop2.GetBest(), pop2.Stage);
+                    if(autoSave && divineInterventions % divineInterventionsPerAutosave == 0)
+                        SavePopulations("DI_N" + divineInterventions, pop1Gs, pop2Gs);
+                    pop1.Repopulate();
+                    pop2.Repopulate();
+                    GenerationChanged?.Invoke();
                     return;
                 }
                     

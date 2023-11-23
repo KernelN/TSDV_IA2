@@ -841,12 +841,14 @@ MonoBehaviour:
     food: []
     population1: []
     population2: []
+  autoSave: 1
   TurnsPerGeneration: 125
-  InitialPopulationCount: 10
+  InitialPopulationCount: 20
   pop1:
     MutationChance: 0.2
     MutationRate: 0.1
     FirstStageElitePairs: 1
+    MinEliteFitness: 1
     InputsCount: 8
     OutputsCount: 6
     HiddenLayers: 6
@@ -857,6 +859,7 @@ MonoBehaviour:
     MutationChance: 0.2
     MutationRate: 0.1
     FirstStageElitePairs: 1
+    MinEliteFitness: 1
     InputsCount: 8
     OutputsCount: 6
     HiddenLayers: 6
