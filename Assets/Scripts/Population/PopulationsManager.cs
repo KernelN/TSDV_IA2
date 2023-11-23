@@ -152,6 +152,8 @@ namespace IA.Population
             pop2.Update();
 
             //Manage food eating
+            bool bothPopsCanSeeEnemies = pop1.Stage >= Stage.Enemies && pop2.Stage >= Stage.Enemies;
+            bool bothPopsCanSeeAllies = pop1.Stage >= Stage.Allies && pop2.Stage >= Stage.Allies;
             while (map.foodTaken.Count > 0)
             {
                 List<AgentBase> agents = map.foodTaken.Values.First();
@@ -164,11 +166,12 @@ namespace IA.Population
                     continue;
                 }
 
-                if (pop1.Stage < Stage.Enemies || pop2.Stage < Stage.Enemies)
+                //If can't interact with enemies yet, only the first one will eat
+                if (!bothPopsCanSeeEnemies)
                 {
                     agents[0].ForceEat();
                     map.foodTaken.Remove(map.foodTaken.Keys.First());
-                    return;
+                    break;
                 }
 
                 //If they're not the same team, fight
@@ -221,7 +224,13 @@ namespace IA.Population
                     }
                 }
 
-                //Else, share
+                //Else, share (Unless they can't interact with allies yet, then only the first one will eat)
+                else if (!bothPopsCanSeeAllies)
+                {
+                    agents[0].ForceEat();
+                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    break;
+                }
                 else
                 {
                     if (agents[0].willGiveFoodToAlly)

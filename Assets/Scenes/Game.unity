@@ -841,6 +841,7 @@ MonoBehaviour:
     food: []
     population1: []
     population2: []
+  divineInterventionsPerAutosave: 10
   autoSave: 1
   TurnsPerGeneration: 125
   InitialPopulationCount: 20
@@ -849,7 +850,7 @@ MonoBehaviour:
     MutationRate: 0.1
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 8
+    InputsCount: 6
     OutputsCount: 6
     HiddenLayers: 6
     NeuronsCountPerHL: 15
@@ -860,7 +861,7 @@ MonoBehaviour:
     MutationRate: 0.1
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 8
+    InputsCount: 6
     OutputsCount: 6
     HiddenLayers: 6
     NeuronsCountPerHL: 15

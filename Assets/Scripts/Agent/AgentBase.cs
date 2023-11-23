@@ -281,24 +281,12 @@ namespace IA.Agent
                 lastDistToFood = distMag;
                 gotCloserToFood++;
             }
-            
+
+            //You only need to know if you've eaten enough when deciding if you should stay or you should go
             if (stage >= Stage.Enemies)
             {
-                dir = (nearEnemy.position - position).IntNormalized();
-                inputs.Add(dir.x);
-                inputs.Add(dir.y);
-            }
-            else
-            {
-                inputs.Add(0);
-                inputs.Add(0);
-            }
-
-            if (stage >= Stage.Allies)
-            {
-                dir = (nearAlly.position - position).IntNormalized();
-                inputs.Add(dir.x);
-                inputs.Add(dir.y);
+                inputs.Add(willSurvive ? 1 : 0);
+                inputs.Add(canReproduce ? 1 : 0);
             }
             else
             {

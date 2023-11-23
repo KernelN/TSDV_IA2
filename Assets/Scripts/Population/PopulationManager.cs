@@ -31,10 +31,9 @@ namespace IA.Population
                  "(The smaller the value, more outputs will be almost 0 or almost 1)")]
         [Range(0.01f,1)] public float P = 0.5f;
 
-        // [Header("Stages")] 
-        // public float BadMinesAvgFitness = 100;
-        // public float TanksAvgFitness = 200;
-        // public float TreesAvgFitness = 300;
+        [Header("Stages")] 
+        public float EnemiesAvgFitness = 100;
+        public float AlliesAvgFitness = 100;
 
         public Stage Stage { get; protected set; } = Stage.Hunger;
 
@@ -233,7 +232,7 @@ namespace IA.Population
                 // Evolve each genome and create a new array of genomes
                 newGenomes = genAlg.Epoch(eliteGenomes.ToArray(), reproGenomes.ToArray());
             }
-            else
+            else //Traditional ML reproduction
             {
                 //Add everyone for reproduction
                 reproGenomes.AddRange(population);
@@ -250,18 +249,15 @@ namespace IA.Population
             // Clear current population
             population.Clear();
 
-            // switch (stage)
-            // {
-            //     case Stage.GoodMines:
-            //         if (avgFitness >= BadMinesAvgFitness) stage++;
-            //         break;
-            //     case Stage.BadMines:
-            //         if (avgFitness >= TanksAvgFitness) stage++;
-            //         break;
-            //     case Stage.Tanks:
-            //         if (avgFitness >= TreesAvgFitness) stage++;
-            //         break;
-            // }
+            switch (Stage)
+            {
+                case Stage.Hunger:
+                    if (avgFitness >= EnemiesAvgFitness) Stage++;
+                    break;
+                case Stage.Enemies:
+                    if (avgFitness >= AlliesAvgFitness) Stage++;
+                    break;
+            }
 
             // Add new population
             population.AddRange(newGenomes);
