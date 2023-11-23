@@ -373,6 +373,11 @@ namespace IA.Population
         {
             return population.ToArray();
         }
+        
+        public Genome[] GetBestGenomes()
+        {
+            return bestGenomes.ToArray();
+        }
 
         // Update the population
         public void Update()

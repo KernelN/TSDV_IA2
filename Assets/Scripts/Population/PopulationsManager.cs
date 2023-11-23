@@ -276,18 +276,55 @@ namespace IA.Population
                 bool pop1Survived = pop1.Epoch();
                 bool pop2Survived = pop2.Epoch();
                     
-                //If neither population survived, end
+                //If neither population survived, make a divine intervention
                 if (!(pop1Survived || pop2Survived))
                 {
                     divineInterventions++;
                     if(autoSave && divineInterventions % divineInterventionsPerAutosave == 0)
                         SavePopulations("DI_N" + divineInterventions, pop1Gs, pop2Gs);
-                    pop1.Repopulate();
-                    pop2.Repopulate();
+                    
+                    
+                    List<GeneAlgo.Genome> bestOfBest = new List<GeneAlgo.Genome>();
+                    
+                    GeneAlgo.Genome[] pop1Best = pop1.GetBestGenomes();
+                    GeneAlgo.Genome[] pop2Best = pop2.GetBestGenomes();
+
+                    //If both have a selection of best genomes, make a mix of both
+                    if (pop1Best.Length > 0 && pop2Best.Length > 0)
+                    {
+                        bestOfBest.AddRange(pop1Best);
+                        bestOfBest.AddRange(pop2Best);
+                        
+                        bestOfBest.Sort(GeneAlgo.GeneticAlgorithm.HandleComparison);
+                        
+                        
+                        GeneAlgo.Genome[] newGenomes = new GeneAlgo.Genome[InitialPopulationCount];
+                
+                        int weightAmount = bestOfBest[0].genome.Length;
+                        for (int i = 0; i < InitialPopulationCount; i++)
+                        {
+                            if(i < bestOfBest.Count) //this ones are the real deal, will reproduce
+                                newGenomes[i] = bestOfBest[i];
+                            else //this ones won't reproduce, as have fit 0, they're only fillers
+                                newGenomes[i] = new GeneAlgo.Genome(weightAmount); 
+                        }
+                        
+                        pop1.Repopulate(newGenomes, pop1.Stage);
+                        pop2.Repopulate(newGenomes, pop2.Stage);
+                    }
+                    
+                    //Else, let them handle the repopulation
+                    else
+                    {
+                        pop1.Repopulate();
+                        pop2.Repopulate();
+                    }
+                    
                     GenerationChanged?.Invoke();
                     return;
                 }
                     
+                //If only one population survived, repopulate the other with random genes of the survivor
                 if(!pop1Survived)
                 {
                     pop1.Repopulate(pop2.GetRandomPopulation(), pop2.Stage);

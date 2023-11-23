@@ -79,7 +79,7 @@ namespace IA.GeneAlgo
             return newPopulation.ToArray();
         }
 
-        public Genome[] Epoch(Genome[] oldGenomes)
+        public Genome[] Epoch(Genome[] oldGenomes, bool sort = true)
         {
             totalFitness = 0;
 
@@ -87,7 +87,8 @@ namespace IA.GeneAlgo
             newPopulation.Clear();
 
             population.AddRange(oldGenomes);
-            population.Sort(HandleComparison);
+            if(sort)
+                population.Sort(HandleComparison);
 
             foreach (Genome g in population)
             {
@@ -240,7 +241,7 @@ namespace IA.GeneAlgo
             return Random.Range(0.0f, 1.0f) < mutationChance * mutMod;
         }
 
-        int HandleComparison(Genome x, Genome y)
+        public static int HandleComparison(Genome x, Genome y)
         {
             return x.fitness > y.fitness ? 1 : x.fitness < y.fitness ? -1 : 0;
         }
