@@ -72,7 +72,32 @@ namespace IA.GeneAlgo
 
             return newPopulation.ToArray();
         }
-        
+
+        public Genome[] Epoch(Genome[] oldGenomes)
+        {
+            totalFitness = 0;
+
+            population.Clear();
+            newPopulation.Clear();
+
+            population.AddRange(oldGenomes);
+            population.Sort(HandleComparison);
+
+            foreach (Genome g in population)
+            {
+                totalFitness += g.fitness;
+            }
+
+            while (newPopulation.Count < maxPopulation)
+            {
+                mutationChance *= 2;
+                Crossover();
+                mutationChance /= 2;
+            }
+
+            return newPopulation.ToArray();
+        }
+
         public Genome[] Epoch(Genome[] oldGenomes, int eliteCount)
         {
             totalFitness = 0;

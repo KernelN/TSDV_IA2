@@ -35,13 +35,14 @@ namespace IA.Game
         int foodCount;
         int agent1Count;
         int agent2Count;
+        bool initiated;
 
 
         //Unity Events
         void Start()
         {
             popsManager = Population.PopulationsManager.Instance;
-            
+
             popsManager.SimulationStarted += OnSimStart;
             popsManager.SimulationUpdated += OnSimUpdate;
             popsManager.GenerationChanged += OnNewGeneration;
@@ -70,12 +71,14 @@ namespace IA.Game
         //Event Receivers
         void OnSimStart()
         {
-            if (data != null)
+            if (initiated)
             {
                 OnNewGeneration();
                 return;
             }
-                
+            
+            initiated = true;
+            
             food = new List<SpriteController>();
             pop1 = new List<SpriteController>();
             pop2 = new List<SpriteController>();

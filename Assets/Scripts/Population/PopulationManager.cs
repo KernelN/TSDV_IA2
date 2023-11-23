@@ -21,8 +21,8 @@ namespace IA.Population
         [Range(0,10)] public int HiddenLayers = 1;
         [Range(0,100)] public int NeuronsCountPerHL = 7;
         [Tooltip("Multiplies each neuron (so the more neurons, bigger the effect).\n" +
-                 "The bigger the value, more outputs will be almost 0 or almost 1.\n" +
-                 "(The smaller the value, more outputs will be between 0-1)")]
+                 "The bigger the value, more outputs will be beyond 0 or beyond 1 (then sigmoid to almost 0 or 1).\n" +
+                 "(The smaller the value, more outputs will be closer to 0-1 then sigmoid to 0-1)")]
         [Range(0,-10)] public float Bias = -1f;
         [Tooltip("Divides(? each neuron (so the less neurons, bigger the effect).\n" +
                  "The bigger the value, more outputs will be between 0-1.\n" +
@@ -34,11 +34,13 @@ namespace IA.Population
         // public float TanksAvgFitness = 200;
         // public float TreesAvgFitness = 300;
 
-        public Stage Stage { get; protected set; }
+        public Stage Stage { get; protected set; } = Stage.Hunger;
 
         GeneticAlgorithm genAlg;
         Game.Map map;
 
+        List<Genome> bestGenomes = new List<Genome>();
+        
         List<Agent.AgentBase> populationControllers = new List<Agent.AgentBase>();
         List<Genome> population = new List<Genome>();
         List<NeuralNetwork> brains = new List<NeuralNetwork>();
@@ -54,12 +56,37 @@ namespace IA.Population
         private float getBestFitness()
         {
             float fitness = 0;
+            Genome bestG = null;
             foreach (Genome g in population)
             {
                 if (fitness < g.fitness)
+                {
                     fitness = g.fitness;
+                    bestG = g;
+                }
             }
 
+            if(bestGenomes.Count < initialPopCount)
+                bestGenomes.Add(bestG);
+            else
+            {
+                float worstFitness = bestGenomes[0].fitness;
+                Genome g = bestGenomes[0];
+                for (int i = 1; i < bestGenomes.Count; i++)
+                {
+                    if(bestGenomes[i].fitness >= worstFitness) continue;
+                    
+                    worstFitness = bestGenomes[i].fitness;
+                    g = bestGenomes[i];
+                }
+
+                if (bestG.fitness > worstFitness)
+                {
+                    bestGenomes.Remove(g);
+                    bestGenomes.Add(bestG);
+                }
+            }
+            
             return fitness;
         }
         private float getAvgFitness()
@@ -101,7 +128,7 @@ namespace IA.Population
         public void StopSimulation()
         {
             generation = 0;
-            Stage = 0;
+            Stage = Stage.Hunger;
         }
 
         // Generate the random initial population
@@ -164,17 +191,18 @@ namespace IA.Population
             // Increment generation counter
             generation++;
 
+            //Calculate the fitness of all agents
+            for (int i = 0; i < populationControllers.Count; i++)
+            {
+                populationControllers[i].CalcFitness();
+            }
+            
             // Calculate best, average and worst fitness
             bestFitness = getBestFitness();
             avgFitness = getAvgFitness();
             worstFitness = getWorstFitness();
 
             Genome[] newGenomes;
-            
-            for (int i = 0; i < populationControllers.Count; i++)
-            {
-                populationControllers[i].CalcFitness();
-            }
             
             //Get elite and reproductive genomes
             List<Genome> eliteGenomes = new List<Genome>();
@@ -266,6 +294,10 @@ namespace IA.Population
         }
 
         // Change population for a new one
+        public void Repopulate()
+        {
+            Repopulate(bestGenomes.ToArray(), Stage);
+        }
         public void Repopulate(Genome[] newGenomes, Stage stage)
         {
             generation = 0;
@@ -314,6 +346,11 @@ namespace IA.Population
         {
             return genAlg.GetRandomPopulation();
         }
+        
+        public Genome[] GetBest()
+        {
+            return genAlg.Epoch(bestGenomes.ToArray());
+        }
 
         public Genome[] GetPopulation()
         {
@@ -330,11 +367,18 @@ namespace IA.Population
                 if(map.food.Count == 0) return;
                 
                 AgentBase a = populationControllers[i];
+                Vec2 agentPos = a.position;
+                
+                a.SetNearAlly(GetAllyPos(agentPos));
+                a.SetNearEnemy(GetEnemyPos(agentPos));
 
-                a.SetNearAlly(GetAllyPos(i));
-                a.SetNearEnemy(GetEnemyPos(i));
-
-                int foodIndex = GetFood(i);
+                if (Stage == Stage.Tutorial && a.foodID >= 0)
+                {
+                    a.Think();
+                    return;
+                }
+                
+                int foodIndex = GetFood(agentPos);
                 a.SetNearFoodPos(map.food[foodIndex], foodIndex);
 
                 void OnFoodTaken()
@@ -420,9 +464,8 @@ namespace IA.Population
             else
                 return new Vec2(index, 0);
         }
-        AgentBase GetAllyPos(int index)
+        AgentBase GetAllyPos(Vec2 pos)
         {
-            Vec2 pos = populationControllers[index].position;
             if (isTeam1)
             {
                 AgentBase nearest = map.population1[0];
@@ -458,9 +501,8 @@ namespace IA.Population
                 return nearest;
             }
         }
-        AgentBase GetEnemyPos(int index)
+        AgentBase GetEnemyPos(Vec2 pos)
         {
-            Vec2 pos = populationControllers[index].position;
             if (isTeam1)
             {
                 AgentBase nearest = map.population2[0];
@@ -496,11 +538,12 @@ namespace IA.Population
                 return nearest;
             }
         }
-        int GetFood(int index)
+        int GetFood(Vec2 pos)
         {
-            Vec2 pos = populationControllers[index].position;
             int nearest = 0;
-            float distance = Vec2.Distance(pos, map.food[nearest]);
+            Vec2 foodPos = map.food[0];
+
+            float distance = Vec2.Distance(pos, foodPos);
             
             for (int i = 1; i < map.food.Count; i++)
             {
@@ -514,7 +557,6 @@ namespace IA.Population
             
             return nearest;
         }
-
 
         #endregion
     }

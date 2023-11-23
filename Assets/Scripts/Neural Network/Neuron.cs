@@ -54,7 +54,8 @@ namespace IA.NeuralNet
 
         private float Sigmoid(float a)
         {
-            return 1.0f / (1.0f + Mathf.Exp(-a / p));
+            float s = 1.0f / (1.0f + Mathf.Exp(-a / p));
+            return s;
         }
     }
 }

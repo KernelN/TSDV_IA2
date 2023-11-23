@@ -16,6 +16,9 @@ namespace IA.Math
         #region Operators
         public static Vec2 operator +(Vec2 a, Vec2 b) { return new Vec2(a.x + b.x, a.y + b.y); }
         public static Vec2 operator -(Vec2 a, Vec2 b) { return new Vec2(a.x - b.x, a.y - b.y); }
+        public static Vec2 operator -(Vec2 a) { return new Vec2(-a.x, -a.y); }
+        public static Vec2 operator *(Vec2 a, int b) { return new Vec2(a.x * b, a.y * b); }
+        public static Vec2 operator *(int a, Vec2 b) { return new Vec2(a * b.x, a * b.y); }
         public static implicit operator Vector2(Vec2 a) { return new Vector2(a.x, a.y); }
         public static implicit operator Vec2(Vector2 a) { return new Vec2((int)a.x, (int)a.y); }
         public static bool operator ==(Vec2 a, Vec2 b) { return a.x == b.x && a.y == b.y; }
@@ -46,6 +49,16 @@ namespace IA.Math
             normalized.x = x / magnitude;
             normalized.y = y / magnitude;
             return normalized;
+        }
+        public Vec2 IntNormalized()
+        {
+            if (x < 0) x = -1;
+            else if (x > 0) x = 1;
+            
+            if (y < 0) y = -1;
+            else if (y > 0) y = 1;
+
+            return this;
         }
         #endregion
 

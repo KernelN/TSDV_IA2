@@ -23,12 +23,13 @@ namespace IA.Population
         [SerializeField] PopulationManager pop1;
         [SerializeField] PopulationManager pop2;
 
+        int divineInterventions;
         float turnTimer;
         bool isRunning;
 
         public static PopulationsManager Instance { get; private set; }
         public int Turn { get; private set; }
-        public int TurnsPerSecond { get; set; } = 1;
+        public int TurnsPerSecond { get; set; } = 5;
         
         public Game.Map Map => map;
         public PopulationManager Pop1 => pop1;
@@ -97,23 +98,26 @@ namespace IA.Population
         public void StopSimulation()
         {
             isRunning = false;
-
-            // // Destroy previous tanks (if there are any)
-            // DestroyAgents();
-            //
-            // // Destroy all mines
-            // DestroyFood();
+            Turn = 0;
+            divineInterventions = 0;
+            
+            pop1.StopSimulation();
+            pop2.StopSimulation();
         }
         public void SavePopulations(string fileName)
+        {
+            SavePopulations(fileName, pop1.GetPopulation(), pop2.GetPopulation());
+        }
+        public void SavePopulations(string fileName, GeneAlgo.Genome[] pop1, GeneAlgo.Genome[] pop2)
         {
             PopulationData pop1Data = new PopulationData();
             PopulationData pop2Data = new PopulationData();
             
-            pop1Data.genomes = pop1.GetPopulation();
-            pop2Data.genomes = pop2.GetPopulation();
+            pop1Data.genomes = pop1;
+            pop2Data.genomes = pop2;
             
-            pop1Data.stage = (int)pop1.Stage;
-            pop2Data.stage = (int)pop2.Stage;
+            pop1Data.stage = (int)this.pop1.Stage;
+            pop2Data.stage = (int)this.pop2.Stage;
             
             string dataPath = Application.persistentDataPath + "pop1Data_" + fileName + ".bin";
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
@@ -252,14 +256,19 @@ namespace IA.Population
                     
                 CreateFood();
                     
+                GeneAlgo.Genome[] pop1Gs = pop1.GetPopulation();
+                GeneAlgo.Genome[] pop2Gs = pop2.GetPopulation();
+                
                 bool pop1Survived = pop1.Epoch();
                 bool pop2Survived = pop2.Epoch();
                     
                 //If neither population survived, end
-                if (!(pop1Survived || pop2Survived)) 
+                if (!(pop1Survived || pop2Survived))
                 {
-                    Debug.Break();
-                    StopSimulation();
+                    divineInterventions++;
+                    SavePopulations("DivineIntervention_N" + divineInterventions, pop1Gs, pop2Gs);
+                    pop1.Repopulate(pop1.GetBest(), pop1.Stage);
+                    pop2.Repopulate(pop2.GetBest(), pop2.Stage);
                     return;
                 }
                     

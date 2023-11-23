@@ -7,9 +7,10 @@ namespace IA.Agent
     [System.Serializable]
     public class AgentBase
     {
-        public Vec2 position;// { get; protected set; }
+        public Vec2 position { get; protected set; }
         public int up;
         public bool isTeam1;
+        public int foodID = -1;
         
         protected Vec2 nearFoodPos;
         protected AgentBase nearAlly;
@@ -23,9 +24,9 @@ namespace IA.Agent
         int lastDistToFood;
         
         //Fitness Values
-        int turnsGettingCloserToFood;
-        int turnsGettingAwayFromFood;
-        int foodID = -1;
+        int moved;
+        int stayedStill;
+        int gotCloserToFood;
         int foodsLost;
         float foodCount;
 
@@ -59,10 +60,15 @@ namespace IA.Agent
         }
         public void SetNearFoodPos(Vec2 nearFoodPos, int index)
         {
-            this.nearFoodPos = nearFoodPos;
-            
-            if(foodID < 0) return;
             if(foodID == index) return;
+            
+            this.nearFoodPos = nearFoodPos;
+
+            if (foodID < 0)
+            {
+                foodID = index;
+                return;
+            }
 
             foodID = index;
             foodsLost++;
@@ -101,14 +107,21 @@ namespace IA.Agent
         }
         public void CalcFitness()
         {
-            if(foodCount>0)
-                fitness *= foodCount * 2;
+            fitness += .15f * gotCloserToFood;
+            //fitness -= .005f * gotAwayFromFood;
             
-            fitness -= foodsLost;
-            fitness += .01f * turnsGettingCloserToFood;
+            if(stayedStill > 0)
+                fitness *= UnityEngine.Mathf.Pow(.65f, stayedStill);
+            
+            fitness += foodCount * 5;
+            
+            // if(foodsLost > 0)
+            //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
 
-            // if (turnsGettingAwayFromFood > 0)
-            //     fitness *= UnityEngine.Mathf.Pow(.9f, turnsGettingAwayFromFood);
+            if(foodCount > 0)
+                fitness *= UnityEngine.Mathf.Pow(1.1f, foodCount);
+            if(foodCount >= 3)
+                fitness *= 2;
 
             if(fitness <= 0) fitness = System.Single.Epsilon;
             genome.fitness = fitness;
@@ -122,14 +135,7 @@ namespace IA.Agent
         public void AdvanceGen()
         {
             generation++;
-            willSurvive = false;
-            canReproduce = false;
-
-            turnsGettingCloserToFood = 0;
-            turnsGettingAwayFromFood = 0;
-            foodID = -1;
-            foodsLost = 0;
-            foodCount = 0;
+            OnReset();
         }
         public void ForceEat(float mod = 1)
         {
@@ -189,10 +195,11 @@ namespace IA.Agent
         }
         protected Vec2 GetDir(float[] cardinals)
         {
-            if (cardinals[4] > cardinals[0]
-                && cardinals[4] > cardinals[1]
-                && cardinals[4] > cardinals[2]
-                && cardinals[4] > cardinals[3])
+            const float stopThreshold = 0.15f;
+            if (cardinals[0] < stopThreshold
+                && cardinals[1] < stopThreshold
+                && cardinals[2] < stopThreshold
+                && cardinals[3] < stopThreshold)
             {
                 return new Vec2(0, 0);
             }
@@ -242,29 +249,44 @@ namespace IA.Agent
         protected virtual void OnReset()
         {
             fitness = 1;
+            
+            willSurvive = false;
+            canReproduce = false;
+
+            lastDistToFood = int.MaxValue;
+            moved = 0;
+            stayedStill = 0;
+            //gotAwayFromFood = 0;
+            gotCloserToFood = 0;
+            foodID = -1;
+            foodsLost = 0;
+            foodCount = 0;
         }
         protected virtual void OnThink()
         {
             inputs.Clear();
+
+            inputs.Add(position.y == maxPos.y ? 1 : 0);
+            inputs.Add(position.y == minPos.y ? 1 : 0);
             
             Vec2 dist = nearFoodPos - position;
-            inputs.Add(dist.x);
-            inputs.Add(dist.y);
+            Vec2 dir = dist.IntNormalized();
+            inputs.Add(dir.x);
+            inputs.Add(dir.y);
             
             int distMag = dist.SqrMagnitude();
 
-            if(distMag < lastDistToFood)
-                turnsGettingCloserToFood++;
-            else
-                turnsGettingAwayFromFood++;
-
-            lastDistToFood = distMag;
+            if (distMag < lastDistToFood)
+            {
+                lastDistToFood = distMag;
+                gotCloserToFood++;
+            }
             
             if (stage >= Stage.Enemies)
             {
-                dist = nearEnemy.position - position;
-                inputs.Add(dist.x);
-                inputs.Add(dist.y);
+                dir = (nearEnemy.position - position).IntNormalized();
+                inputs.Add(dir.x);
+                inputs.Add(dir.y);
             }
             else
             {
@@ -274,9 +296,9 @@ namespace IA.Agent
 
             if (stage >= Stage.Allies)
             {
-                dist = nearAlly.position - position;
-                inputs.Add(dist.x);
-                inputs.Add(dist.y);
+                dir = (nearAlly.position - position).IntNormalized();
+                inputs.Add(dir.x);
+                inputs.Add(dir.y);
             }
             else
             {
@@ -286,10 +308,14 @@ namespace IA.Agent
 
             float[] outputs = brain.Synapsis(inputs.ToArray());
             
-            Move(GetDir(outputs));
+            Vec2 moveDir = GetDir(outputs);
+            Move(moveDir);
             
-            willFleeAgainstEnemy = outputs[5] > 0.5f;
-            willGiveFoodToAlly = outputs[6] > 0.5f;
+            if(position == prevPos)
+                stayedStill++;
+
+            willFleeAgainstEnemy = outputs[4] > 0.5f;
+            willGiveFoodToAlly = outputs[5] > 0.5f;
         }
         protected virtual void OnEat(float foodEaten = 1)
         {
@@ -298,7 +324,7 @@ namespace IA.Agent
                 willSurvive = true;
             else
                 canReproduce = true;
-            
+
             foodCount += foodEaten;
             lastDistToFood = int.MaxValue;
             foodID = -1;
