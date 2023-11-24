@@ -320,12 +320,19 @@ namespace IA.Population
             else //If there are no best ones, generate a completely new batch of agents
                 GenerateInitialPopulation();
         }
-        public void Repopulate(Genome[] newGenomes, Stage stage)
+
+        public void Repopulate(Genome[] newGenomes, Stage stage, bool epochGenomes = false)
         {
             generation = 0;
             population.Clear();
             
             Stage = stage;
+
+            if (epochGenomes)
+            {
+                newGenomes = genAlg.Epoch(newGenomes, false);
+            }
+            
 
             // Add new population
             population.AddRange(newGenomes);
@@ -465,6 +472,8 @@ namespace IA.Population
         void OnAgentDied(AgentBase agent)
         {
             int index = populationControllers.IndexOf(agent);
+            
+            if(index < 0) return;
             
             brains.RemoveAt(index);
             population.RemoveAt(index);

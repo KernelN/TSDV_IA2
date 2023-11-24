@@ -309,8 +309,8 @@ namespace IA.Population
                                 newGenomes[i] = new GeneAlgo.Genome(weightAmount); 
                         }
                         
-                        pop1.Repopulate(newGenomes, pop1.Stage);
-                        pop2.Repopulate(newGenomes, pop2.Stage);
+                        pop1.Repopulate(newGenomes, pop1.Stage, true);
+                        pop2.Repopulate(newGenomes, pop2.Stage, true);
                     }
                     
                     //Else, let them handle the repopulation
