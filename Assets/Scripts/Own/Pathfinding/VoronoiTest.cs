@@ -9,7 +9,6 @@ namespace IA.Pathfinding.Voronoi
         public class Point
         {
             public Vector2 p;
-            public float w;
         }
         
         [Header("Set Values")] 
@@ -39,14 +38,19 @@ namespace IA.Pathfinding.Voronoi
             colorsOfInterest = new Color[pointsOfInterest.Length];
             posOfInterest = new Vector2[pointsOfInterest.Length];
 
-            bool needsRandomColors = colorsOfInterest.Length >= colors.Length;
+            bool needsRandomColors = colorsOfInterest.Length > colors.Length;
             if (!needsRandomColors)
                 colorsOfInterest = colors;
             
             for (int i = 0; i < pointsOfInterest.Length; i++)
             {
                 if (needsRandomColors)
-                    colorsOfInterest[i] = colors[Random.Range(0, colors.Length)];
+                {
+                    if(i < colors.Length)
+                        colorsOfInterest[i] = colors[i];
+                    else
+                        colorsOfInterest[i] = colors[Random.Range(0, colors.Length)];
+                }
                 posOfInterest[i].x = pointsOfInterest[i].p.x * points.x;
                 posOfInterest[i].y = pointsOfInterest[i].p.y * points.y;
             }
@@ -63,6 +67,8 @@ namespace IA.Pathfinding.Voronoi
                     for (int k = 0; k < pointsOfInterest.Length; k++)
                     {
                         float distance = Vector2.Distance(new Vector2(i, j), posOfInterest[k]);
+                        //distance /= pointsOfInterest[k].w;
+                        
                         if(distance < nearestDistance)
                         {
                             nearestDistance = distance;
