@@ -9,6 +9,7 @@ namespace IA.Pathfinding.Grid
         public bool walkable;
         public Vector3 worldPos;
         public Vector2Int gridPos;
+        public int weight;
 
         public int gCost; //Distance from start
         public int hCost; //Distance to target
@@ -19,11 +20,12 @@ namespace IA.Pathfinding.Grid
         public int FCost { get { return gCost + hCost; } } //Total cost
         
         public PathNode(){ neighbours = new List<PathNode>(); }
-        public PathNode(bool _walkable, Vector3 _worldPos, Vector2Int _gridPos)
+        public PathNode(bool _walkable, Vector3 _worldPos, Vector2Int _gridPos, int _weight = 0)
         {
             walkable = _walkable;
             worldPos = _worldPos;
             gridPos = _gridPos;
+            weight = _weight;
         }
         public PathNode(PathNode node)
         {

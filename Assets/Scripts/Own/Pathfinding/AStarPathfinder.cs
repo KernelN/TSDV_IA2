@@ -1,10 +1,14 @@
-using System;
 using System.Collections.Generic;
 using IA.Pathfinding.Grid;
 using UnityEngine;
 
 namespace IA.Pathfinding
 {
+    /// <summary>
+    /// Based on Lague's A* Pathfinding:
+    /// https://youtube.com/playlist?list=PLFt_AvWsXl0cq5Umv3pMC9SPnKjfp9eGW&amp;si=OmsMlMnHXmTXOmU1
+    /// https://github.com/SebLague/Pathfinding
+    /// </summary>
     public class AStarPathfinder : MonoBehaviour
     {
         [Header("Set Values")]
@@ -71,15 +75,17 @@ namespace IA.Pathfinding
                     
                     if (!neighbour.walkable || closedList.Contains(neighbour)) continue;
                     
-                    int moveCost = currentNode.gCost + GetDistance(currentNode, neighbour);
+                    int moveCost = currentNode.gCost + GetDistance(currentNode, neighbour) + neighbour.weight;
                     if (moveCost < neighbour.gCost || !openList.Contains(neighbour))
                     {
                         neighbour.gCost = moveCost;
                         neighbour.hCost = GetDistance(neighbour, targetNode);
                         neighbour.parent = currentNode;
-                    
+
                         if (!openList.Contains(neighbour))
+                        {
                             openList.Add(neighbour);
+                        }
                     }
                 }
             }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,10 +10,14 @@ namespace IA.Pathfinding.Grid
         public LayerMask unwalkableMask;
         public Vector2 gridWorldSize;
         public float nodeRadius;
+        public PathTerrain[] terrains;
         //[Header("Runtime Values")]
         PathNode[,] grid;
         Vector2Int gridSize;
+        LayerMask terrainsMask;
+        Dictionary<int, int> terrainsDictionary;
         [Header("DEBUG")]
+        [SerializeField, Min(1)] int maxNodeWeight = 100;
         public List<PathNode> path;
 
         float NodeDiameter { get { return nodeRadius * 2; } }
@@ -26,6 +28,17 @@ namespace IA.Pathfinding.Grid
             gridSize = new Vector2Int();
             gridSize.x = Mathf.RoundToInt(gridWorldSize.x / NodeDiameter);
             gridSize.y = Mathf.RoundToInt(gridWorldSize.y / NodeDiameter);
+
+            terrainsDictionary = new Dictionary<int, int>();
+            for (int i = 0; i < terrains.Length; i++)
+            {
+                //Add all terrains layers to the mask
+                terrainsMask |= terrains[i].mask;
+
+                //Add all terrains to the dictionary
+                int layerIndex = (int)Mathf.Log(terrains[i].mask.value, 2);
+                terrainsDictionary.Add(layerIndex, terrains[i].weight); 
+            }
             
             CreateGrid();
         }
@@ -51,8 +64,11 @@ namespace IA.Pathfinding.Grid
                         Gizmos.color = Color.cyan;
                     else if (path != null && path.Contains(node))
                         Gizmos.color = Color.green;
+                    else if (!node.walkable)
+                        Gizmos.color = Color.red;
                     else
-                        Gizmos.color = (node.walkable) ? Color.white : Color.red;
+                        Gizmos.color = Color.Lerp(Color.white, Color.black, 
+                                                       (float)node.weight / maxNodeWeight);
                     
                     Gizmos.DrawCube(node.worldPos, nodeWorldSize);
                 }
@@ -83,6 +99,8 @@ namespace IA.Pathfinding.Grid
             worldBotLeft -= Vector3.right * gridWorldSize.x / 2;
             worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
 
+            Ray terrainRay = new Ray(Vector3.zero, Vector3.down);
+            
             //Create nodes
             for (int i = 0; i < gridSize.x; i++)
             {
@@ -98,9 +116,22 @@ namespace IA.Pathfinding.Grid
                     
                     //Check if node is walkable
                     bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, unwalkableMask));
+
+                    if (!walkable)
+                    {
+                        //Create node
+                        grid[i, j] = new PathNode(false, worldPoint, new Vector2Int(i, j));
+                        continue;
+                    }
+
+                    int mPenalty = 0;
+                    const int rayHeightOffset = 50;
+                    terrainRay.origin = worldPoint + Vector3.up * rayHeightOffset;
+                    if (Physics.Raycast(terrainRay, out RaycastHit hit, 1000, terrainsMask))
+                        terrainsDictionary.TryGetValue(hit.collider.gameObject.layer, out mPenalty);
                     
                     //Create node
-                    grid[i, j] = new PathNode(walkable, worldPoint, new Vector2Int(i, j));
+                    grid[i, j] = new PathNode(walkable, worldPoint, new Vector2Int(i, j), mPenalty);
                 }
             }
             
