@@ -40,5 +40,20 @@ namespace IA.Pathfinding
         {
             return pathfinders[index];
         }
+        public float GetNodeDiameter(int index)
+        {
+            return grids[index].NodeDiameter;
+        }
+        public Vector2Int GetGridPos(Vector3 worldPos, int index)
+        {
+            return grids[index].NodeFromWorldPoint(worldPos).gridPos;
+        }
+        public void RemovePointOfInterest(Vector2Int worldPos)
+        {
+            for (int i = 0; i < pathfinders.Length; i++)
+            {
+                pathfinders[i].RemovePointOfInterest(worldPos);
+            }
+        }
     }
 }

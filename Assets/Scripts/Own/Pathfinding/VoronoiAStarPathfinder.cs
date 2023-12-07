@@ -23,32 +23,7 @@ namespace IA.Pathfinding.Voronoi
 
             regionsByNode = new Dictionary<Vector2Int, int>();
             
-            for (int x = 0; x < grid.gridSize.x; x++)
-            {
-                for (int y = 0; y < grid.gridSize.y; y++)
-                {
-                    PathNode node = grid.grid[x, y];
-                    PathNode target = grid.NodeFromWorldPoint(pointsOfInterest[0].position);
-                    float cost = GetCost(node, target);
-                    
-                    int cheapestPoint = 0;
-                    float smallestCost = GetCost(node, target);
-                    
-                    for (int i = 1; i < pointsOfInterest.Count; i++)
-                    {
-                        target = grid.NodeFromWorldPoint(pointsOfInterest[i].position);
-                        cost = GetCost(node, target);
-                        
-                        if (cost < smallestCost)
-                        {
-                            smallestCost = cost;
-                            cheapestPoint = i;
-                        }
-                    }
-                    
-                    regionsByNode.Add(new Vector2Int(x,y), cheapestPoint);
-                }
-            }
+            CalculateVoronoi();
         }
         public void DrawGizmos()
         {
@@ -126,8 +101,56 @@ namespace IA.Pathfinding.Voronoi
         {
             return FindPath(startPos, pointsOfInterest[region].position);
         }
+        public void RemovePointOfInterest(Vector2Int gridPos)
+        {
+            int region;
+
+            if(!regionsByNode.TryGetValue(gridPos, out region)) return;
+
+            pointsOfInterest.RemoveAt(region);
+            
+            CalculateVoronoi(true);
+        }
         
         //Private Methods
+        void CalculateVoronoi(bool recalculate = false)
+        {
+            if (pointsOfInterest.Count <= 0) return;
+            
+            for (int x = 0; x < grid.gridSize.x; x++)
+            {
+                for (int y = 0; y < grid.gridSize.y; y++)
+                {
+                    PathNode node = grid.grid[x, y];
+                    PathNode target = grid.NodeFromWorldPoint(pointsOfInterest[0].position);
+                    float cost = GetCost(node, target);
+                    
+                    int cheapestPoint = 0;
+                    float smallestCost = GetCost(node, target);
+                    
+                    for (int i = 1; i < pointsOfInterest.Count; i++)
+                    {
+                        target = grid.NodeFromWorldPoint(pointsOfInterest[i].position);
+                        cost = GetCost(node, target);
+                        
+                        if (cost < smallestCost)
+                        {
+                            smallestCost = cost;
+                            cheapestPoint = i;
+                        }
+                    }
+
+                    Vector2Int nodeGridPos = new Vector2Int(x,y);
+                    if (recalculate)
+                    {
+                        regionsByNode.Remove(nodeGridPos);
+                        regionsByNode.Add(nodeGridPos, cheapestPoint);
+                    }
+                    else
+                        regionsByNode.Add(nodeGridPos, cheapestPoint);
+                }
+            }
+        }
         float GetCost(PathNode start, PathNode end)
         {
             List<PathNode> path = FindPath(start, end);

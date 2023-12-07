@@ -32,7 +32,15 @@ namespace IA.FSM
 
         public void SetCurrentStateForced(int state)
         {
+            if(states.ContainsKey(currentStateIndex))
+                foreach (Action OnExit in states[currentStateIndex].GetOnExitBehaviours(exitParameters[currentStateIndex]?.Invoke()))
+                    OnExit?.Invoke();
+            
             currentStateIndex = state;
+            
+            if(states.ContainsKey(currentStateIndex))
+                foreach (Action OnEnter in states[currentStateIndex].GetOnEnterBehaviours(enterParameters[currentStateIndex]?.Invoke()))
+                    OnEnter?.Invoke();
         }
 
         public void SetRelation(int sourceState, int flag, int destinationState)
