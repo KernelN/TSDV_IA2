@@ -2,46 +2,38 @@ using System.Collections.Generic;
 using IA.Pathfinding.Grid;
 using UnityEngine;
 
-namespace IA.Pathfinding
+namespace IA.Pathfinding.AStar
 {
     /// <summary>
     /// Based on Lague's A* Pathfinding:
     /// https://youtube.com/playlist?list=PLFt_AvWsXl0cq5Umv3pMC9SPnKjfp9eGW&amp;si=OmsMlMnHXmTXOmU1
     /// https://github.com/SebLague/Pathfinding
     /// </summary>
-    public class AStarPathfinder : MonoBehaviour
+    [System.Serializable]
+    public class AStarPathfinder
     {
-        [Header("Set Values")]
-        [SerializeField] PathGrid grid;
-        [SerializeField] Transform player;
-        [SerializeField] Transform target;
+        //[Header("Set Values")]
         //[Header("Runtime Values")]
+        internal PathGrid grid;
         // PathNode startNode;
         // PathNode targetNode;
-        [Header("DEBUG")]
-        [SerializeField] float pathFindInterval;
-        [SerializeField] float pathFindTimer;
-        
-        //Unity Events
-        void Start() => pathFindTimer = pathFindInterval;
-        void Update()
-        {
-            if(pathFindTimer > 0)
-            {
-                pathFindTimer -= Time.deltaTime;
-                return;
-            }
-            
-            pathFindTimer = pathFindInterval;
-            FindPath(player.position, target.position);
-        }
 
+        //Unity Methods
+        public virtual void Set(PathGrid grid)
+        {
+            this.grid = grid;
+        }
+        
         //Methods
-        void FindPath(Vector3 startPos, Vector3 targetPos)
+        public List<PathNode> FindPath(Vector3 startPos, Vector3 targetPos)
         {
             PathNode startNode = grid.NodeFromWorldPoint(startPos);
             PathNode targetNode = grid.NodeFromWorldPoint(targetPos);
-            
+         
+            return FindPath(startNode, targetNode);
+        }
+        public List<PathNode> FindPath(PathNode startNode, PathNode targetNode)
+        {
             List<PathNode> openList = new List<PathNode>();
             List<PathNode> closedList = new List<PathNode>();
             
@@ -66,7 +58,7 @@ namespace IA.Pathfinding
                 
                 if (currentNode == targetNode)
                 {
-                    RetracePath(startNode, targetNode);
+                    return RetracePath(startNode, targetNode);
                 }
 
                 for (int i = 0; i < currentNode.neighbours.Count; i++)
@@ -89,8 +81,10 @@ namespace IA.Pathfinding
                     }
                 }
             }
+            
+            return null;
         }
-        void RetracePath(PathNode startNode, PathNode endNode)
+        List<PathNode> RetracePath(PathNode startNode, PathNode endNode)
         {
             List<PathNode> path = new List<PathNode>();
             path.Add(endNode);
@@ -104,7 +98,7 @@ namespace IA.Pathfinding
             }
             
             path.Reverse();
-            grid.path = path;
+            return path;
         }
         int GetDistance(PathNode nodeA, PathNode nodeB)
         {

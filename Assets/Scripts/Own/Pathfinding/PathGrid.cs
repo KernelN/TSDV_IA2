@@ -3,31 +3,37 @@ using UnityEngine;
 
 namespace IA.Pathfinding.Grid
 {
-    public class PathGrid : MonoBehaviour
+    [System.Serializable]
+    public class PathGrid
     {
         [Header("Set Values")]
-        public Transform player;
         public LayerMask unwalkableMask;
-        public Vector2 gridWorldSize;
         public float nodeRadius;
         public PathTerrain[] terrains;
         //[Header("Runtime Values")]
-        PathNode[,] grid;
-        Vector2Int gridSize;
+        Transform gridT;
+        Vector2 gridWorldSize;
         LayerMask terrainsMask;
         Dictionary<int, int> terrainsDictionary;
         [Header("DEBUG")]
+        [SerializeField] Transform player;
         [SerializeField, Min(1)] int maxNodeWeight = 100;
-        public List<PathNode> path;
+        [SerializeField, Range(0.001f, 1)] float nodeHeight = 0.5f;
 
-        float NodeDiameter { get { return nodeRadius * 2; } }
+        public PathNode[,] grid { get; private set; }
+        public Vector2Int gridSize { get; private set; }
+        public float NodeDiameter { get { return nodeRadius * 2; } }
         
-        //Unity Events
-        void Start()
+        //Unity Methods
+        public void Set(Transform gridTransform, Vector2 gridWorldSize)
         {
-            gridSize = new Vector2Int();
+            gridT = gridTransform;
+            this.gridWorldSize = gridWorldSize;
+            
+            Vector2Int gridSize = new Vector2Int();
             gridSize.x = Mathf.RoundToInt(gridWorldSize.x / NodeDiameter);
             gridSize.y = Mathf.RoundToInt(gridWorldSize.y / NodeDiameter);
+            this.gridSize = gridSize;
 
             terrainsDictionary = new Dictionary<int, int>();
             for (int i = 0; i < terrains.Length; i++)
@@ -42,17 +48,51 @@ namespace IA.Pathfinding.Grid
             
             CreateGrid();
         }
-        void OnDrawGizmos()
+        public void DrawGizmos(Transform gridT, Vector2Int gridWorldSize)
         {
             //Draw grid
             Vector3 worldSize = new Vector3(gridWorldSize.x, 1, gridWorldSize.y);
-            Gizmos.DrawWireCube(transform.position, worldSize);
+            Gizmos.DrawWireCube(gridT.position, worldSize);
+            
+            //If grid is not initialized, draw scheme of nodes
+            if (grid == null)
+            {
+                Gizmos.color = Color.gray;
+                Vector3 lineStart;
+                Vector3 lineEnd;
+                Vector3 worldBotLeft = gridT.position;
+                worldBotLeft.y = gridT.localScale.y*.55f;
+                worldBotLeft -= Vector3.right * gridWorldSize.x / 2;
+                worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
+                for (int x = 0; x <= gridWorldSize.x / (NodeDiameter); x++)
+                {
+                    lineStart = worldBotLeft;
+                    lineEnd = worldBotLeft;
+                    
+                    float xPos = x * NodeDiameter;
+                    lineStart += new Vector3(xPos, 0, 0);
+                    lineEnd += new Vector3(xPos, 0, gridWorldSize.y);
+                    
+                    Gizmos.DrawLine(lineStart, lineEnd);
+                }
+                for (int y = 0; y <= gridWorldSize.y / (NodeDiameter); y++)
+                {
+                    
+                    lineStart = worldBotLeft;
+                    lineEnd = worldBotLeft;
+
+                    float yPos = y * NodeDiameter;
+                    lineStart += new Vector3(0, 0, yPos);
+                    lineEnd += new Vector3(gridWorldSize.x, 0, yPos);
+                    
+                    Gizmos.DrawLine(lineStart, lineEnd);
+                }
+                return;
+            }
             
             //Draw nodes
-            if (grid == null) return;
-            
             float nodeSize = NodeDiameter*.9f;
-            Vector3 nodeWorldSize = new Vector3(nodeSize, transform.localScale.y*1.1f, nodeSize);
+            Vector3 nodeWorldSize = new Vector3(nodeSize, nodeHeight, nodeSize);
             PathNode playerNode = NodeFromWorldPoint(player.position);
             for (int x = 0; x < gridSize.x; x++)
             {
@@ -62,8 +102,6 @@ namespace IA.Pathfinding.Grid
                     
                     if(node == playerNode)
                         Gizmos.color = Color.cyan;
-                    else if (path != null && path.Contains(node))
-                        Gizmos.color = Color.green;
                     else if (!node.walkable)
                         Gizmos.color = Color.red;
                     else
@@ -92,10 +130,27 @@ namespace IA.Pathfinding.Grid
             
             return grid[x, y];
         }
+        public Vector2Int GetGridPosition(Vector3 worldPos)
+        {
+            //pos + half size gives pos as if center was botLeft, / gridsize gives pos in grid in percentage
+            float percentX = (worldPos.x + gridWorldSize.x / 2) / gridWorldSize.x;
+            float percentY = (worldPos.z + gridWorldSize.y / 2) / gridWorldSize.y;
+            
+            //Clamp to make sure we dont go out of bounds
+            percentX = Mathf.Clamp01(percentX);
+            percentY = Mathf.Clamp01(percentY);
+            
+            //Get grid pos and round to int (to get index)
+            int x = Mathf.RoundToInt((gridSize.x - 1) * percentX);
+            int y = Mathf.RoundToInt((gridSize.y - 1) * percentY);
+            
+            return new Vector2Int(x, y);
+        }
         void CreateGrid()
         {
             grid = new PathNode[gridSize.x, gridSize.y];
-            Vector3 worldBotLeft = transform.position;
+            Vector3 worldBotLeft = gridT.position;
+            worldBotLeft.y = gridT.localScale.y*.55f;
             worldBotLeft -= Vector3.right * gridWorldSize.x / 2;
             worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
 
