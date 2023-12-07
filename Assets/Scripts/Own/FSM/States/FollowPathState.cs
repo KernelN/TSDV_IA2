@@ -17,22 +17,23 @@ namespace IA.FSM
         
         public override List<Action> GetOnEnterBehaviours(params object[] parameters)
         {
+            Pathfinding.PathManager pathManager = (Pathfinding.PathManager)parameters[0];
+            int pathfinderIndex = (int)parameters[1];
+            Vector3 startPos = (Vector3)parameters[2];
+            speed = (float)parameters[3];
+            nodeDiameter = (float)parameters[4];
+            reachedFlag = (int)parameters[5];
 
+            Vector3 targetPos = Vector3.zero;
+            if (parameters.Length > 6)
+                targetPos = (Vector3)parameters[6];
+            
+            currentNode = 0;
+            
             List<Action> behaviours = new List<Action>();
 
             behaviours.Add(() =>
-            { //Set values
-              Pathfinding.PathManager pathManager = (Pathfinding.PathManager)parameters[0];
-              int pathfinderIndex = (int)parameters[1];
-              Vector3 startPos = (Vector3)parameters[2];
-              speed = (float)parameters[3];
-              nodeDiameter = (float)parameters[4];
-              Vector3 targetPos = Vector3.zero;
-              reachedFlag = (int)parameters[5];
-              if (parameters.Length > 6)
-                  targetPos = (Vector3)parameters[6];
-
-              //Get path
+            { 
               if (parameters.Length > 6)
                   path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
               else
@@ -77,14 +78,13 @@ namespace IA.FSM
             if(parameters == null) return new List<Action>();
             if(parameters.Length <= 0) return new List<Action>();
             
-            
             Action<Vector2Int> destinyGridPos = (Action<Vector2Int>)parameters[0];
             
             List<Action> behaviours = new List<Action>();
             
             behaviours.Add(() =>
             {
-                destinyGridPos?.Invoke(path[0].gridPos);
+                destinyGridPos?.Invoke(path[^1].gridPos);
             });
             
             return behaviours;

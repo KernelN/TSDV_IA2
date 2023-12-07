@@ -2171,7 +2171,7 @@ MonoBehaviour:
     moveSpeed: 5
     mineInterval: 0.25
     eatDuration: 3
-    depositDuration: 0.25
+    depositDuration: 3
   minerPrefab: {fileID: 6154075679692172164, guid: 3ada2927495bdff4080aeaa61423f43f, type: 3}
   maxMiners: 1
   minerSpawnInterval: 3

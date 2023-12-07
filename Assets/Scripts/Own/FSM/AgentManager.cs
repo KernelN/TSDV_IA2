@@ -98,7 +98,7 @@ namespace IA.FSM
             {
                 mine.minerals--;
                 
-                if (mine.minerals <= 0)
+                if (mine.minerals < 0)
                 {
                     minesByGridPos.Remove(minePos);
                     mine.t.gameObject.SetActive(false);
@@ -112,7 +112,7 @@ namespace IA.FSM
                     return false;
                 }
                 
-                return true;
+                return mine.minerals >= 0;
             }
             
             return false;
