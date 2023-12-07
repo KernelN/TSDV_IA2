@@ -24,7 +24,6 @@ namespace IA.FSM.Miner
             minePos = (Vector2Int)parameters[3];
             
             timer = mineInterval;
-            mineralCount = 0;
 
             return new List<Action>(); //Doesn't have behaviours, its just a setter
         }

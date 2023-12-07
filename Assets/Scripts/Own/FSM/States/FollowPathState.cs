@@ -32,7 +32,7 @@ namespace IA.FSM
               if (parameters.Length > 6)
                   targetPos = (Vector3)parameters[6];
 
-            //Get path
+              //Get path
               if (parameters.Length > 6)
                   path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
               else
@@ -73,7 +73,9 @@ namespace IA.FSM
 
         public override List<Action> GetOnExitBehaviours(params object[] parameters)
         {
-            if(parameters.Length <= 0) return new List<Action>(); //Not all path followers need this
+            //Not all path followers need this
+            if(parameters == null) return new List<Action>();
+            if(parameters.Length <= 0) return new List<Action>();
             
             
             Action<Vector2Int> destinyGridPos = (Action<Vector2Int>)parameters[0];
@@ -82,7 +84,7 @@ namespace IA.FSM
             
             behaviours.Add(() =>
             {
-                destinyGridPos?.Invoke(path[^1].gridPos);
+                destinyGridPos?.Invoke(path[0].gridPos);
             });
             
             return behaviours;

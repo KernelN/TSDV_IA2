@@ -525,8 +525,8 @@ Camera:
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
-  orthographic: 0
-  orthographic size: 5
+  orthographic: 1
+  orthographic size: 7.5
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -550,7 +550,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 308723597}
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 10, z: 0}
+  m_LocalPosition: {x: 0, y: 13, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2169,11 +2169,11 @@ MonoBehaviour:
   urbanCenter: {fileID: 182339972}
   minerTemplate:
     moveSpeed: 5
-    mineInterval: 0.75
+    mineInterval: 0.25
     eatDuration: 3
     depositDuration: 0.25
   minerPrefab: {fileID: 6154075679692172164, guid: 3ada2927495bdff4080aeaa61423f43f, type: 3}
-  maxMiners: 5
+  maxMiners: 1
   minerSpawnInterval: 3
   mines:
   - t: {fileID: 468440816}
