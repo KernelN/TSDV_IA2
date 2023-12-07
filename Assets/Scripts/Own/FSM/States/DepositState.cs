@@ -16,7 +16,7 @@ namespace IA.FSM.Miner
         {
             depositDuration = (float)parameters[0];
             
-            timer = depositDuration;
+            timer = 0;
 
             List<Action> behaviours = new List<Action>();
             
