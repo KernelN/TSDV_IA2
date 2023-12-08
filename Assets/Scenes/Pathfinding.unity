@@ -2181,7 +2181,7 @@ MonoBehaviour:
     food: 75
     gridPos: {x: 0, y: 0}
   - t: {fileID: 519490209}
-    minerals: 30
+    minerals: 28
     food: 75
     gridPos: {x: 0, y: 0}
   - t: {fileID: 1952884550}

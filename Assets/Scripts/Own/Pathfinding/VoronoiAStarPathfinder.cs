@@ -11,6 +11,7 @@ namespace IA.Pathfinding.Voronoi
         public List<Transform> pointsOfInterest;
         //[Header("Runtime Values")]
         Dictionary<Vector2Int, int> regionsByNode;
+        Dictionary<Vector2Int, Dictionary<int, float>> regionsCostByNode;
         [Header("DEBUG")]
         [SerializeField, Range(0.001f,1)] float nodeHeight = 0.5f;
         [SerializeField] Color[] possibleRegionColors;
@@ -22,6 +23,7 @@ namespace IA.Pathfinding.Voronoi
             base.Set(grid);
 
             regionsByNode = new Dictionary<Vector2Int, int>();
+            regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
             
             CalculateVoronoi();
         }
@@ -68,7 +70,8 @@ namespace IA.Pathfinding.Voronoi
                 {
                     int region = regionsByNode[new Vector2Int(x,y)];
                     
-                    Gizmos.color = colorsByRegion[region];
+                    colorsByRegion.TryGetValue(region, out Color regionColor);
+                    Gizmos.color = regionColor;
                     
                     Gizmos.DrawCube(grid.grid[x, y].worldPos, nodeSize);
                 }
@@ -121,33 +124,73 @@ namespace IA.Pathfinding.Voronoi
             {
                 for (int y = 0; y < grid.gridSize.y; y++)
                 {
-                    PathNode node = grid.grid[x, y];
-                    PathNode target = grid.NodeFromWorldPoint(pointsOfInterest[0].position);
-                    float cost = GetCost(node, target);
-                    
+                    Vector2Int gridPos = new Vector2Int(x, y);
                     int cheapestPoint = 0;
-                    float smallestCost = GetCost(node, target);
                     
-                    for (int i = 1; i < pointsOfInterest.Count; i++)
+                    if (regionsCostByNode.TryGetValue(gridPos, out Dictionary<int, float> costs))
                     {
-                        target = grid.NodeFromWorldPoint(pointsOfInterest[i].position);
-                        cost = GetCost(node, target);
-                        
-                        if (cost < smallestCost)
+                        int regionID = pointsOfInterest[0].GetInstanceID();
+                        costs.TryGetValue(regionID, out float cost);
+                        if (recalculate)
                         {
-                            smallestCost = cost;
-                            cheapestPoint = i;
+                            costs.Remove(regionID);
+                            costs.Add(regionID, cost);
+                        }
+                        
+                        float smallestCost = cost;
+                        
+                        for (int i = 1; i < pointsOfInterest.Count; i++)
+                        {
+                            regionID = pointsOfInterest[i].GetInstanceID();
+                            costs.TryGetValue(regionID, out cost);
+                            
+                            if (cost < smallestCost)
+                            {
+                                smallestCost = cost;
+                                cheapestPoint = i;
+                            }
+
+                            if (recalculate)
+                            {
+                                costs.Remove(regionID);
+                                costs.Add(regionID, cost);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Dictionary<int, float> newCosts = new Dictionary<int, float>();
+                        regionsCostByNode.Add(gridPos, newCosts);
+
+                        PathNode node = grid.grid[x, y];
+                        PathNode target = grid.NodeFromWorldPoint(pointsOfInterest[0].position);
+                        float cost = GetCost(node, target);
+                        newCosts.Add(pointsOfInterest[0].GetInstanceID(), cost);
+
+                        float smallestCost = cost;
+
+                        for (int i = 1; i < pointsOfInterest.Count; i++)
+                        {
+                            target = grid.NodeFromWorldPoint(pointsOfInterest[i].position);
+                            cost = GetCost(node, target);
+
+                            if (cost < smallestCost)
+                            {
+                                smallestCost = cost;
+                                cheapestPoint = i;
+                            }
+                            
+                            newCosts.TryAdd(pointsOfInterest[i].GetInstanceID(), cost);
                         }
                     }
 
-                    Vector2Int nodeGridPos = new Vector2Int(x,y);
                     if (recalculate)
                     {
-                        regionsByNode.Remove(nodeGridPos);
-                        regionsByNode.Add(nodeGridPos, cheapestPoint);
+                        regionsByNode.Remove(gridPos);
+                        regionsByNode.Add(gridPos, cheapestPoint);
                     }
                     else
-                        regionsByNode.Add(nodeGridPos, cheapestPoint);
+                        regionsByNode.Add(gridPos, cheapestPoint);
                 }
             }
         }

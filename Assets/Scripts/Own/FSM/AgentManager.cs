@@ -82,12 +82,12 @@ namespace IA.FSM
             miner.eatDuration = minerTemplate.eatDuration;
             miner.depositDuration = minerTemplate.depositDuration;
             
-            GameObject minerBody = Instantiate(minerPrefab);
-            minerBody.transform.parent = transform;
-            minerBody.transform.position = urbanCenter.position;
+            Transform minerBody = Instantiate(minerPrefab).transform;
+            minerBody.parent = transform;
+            minerBody.position = urbanCenter.position;
             Func<Vector2Int, bool> tryMine = TryMine;
             Func<Vector2Int, bool> tryEat = TryEat;
-            miner.Set(pathManager, 0, urbanCenter, urbanCenter, minerBody.transform, tryMine, tryEat);
+            miner.Set(pathManager, 0, urbanCenter, urbanCenter, minerBody, tryMine, tryEat);
             
             miners.Add(miner);
         }
@@ -98,7 +98,7 @@ namespace IA.FSM
             {
                 mine.minerals--;
                 
-                if (mine.minerals < 0)
+                if (mine.minerals <= 0)
                 {
                     minesByGridPos.Remove(minePos);
                     mine.t.gameObject.SetActive(false);
@@ -108,8 +108,6 @@ namespace IA.FSM
                     if(minesByGridPos.Count <= 0)
                         for (int i = 0; i < miners.Count; i++)
                             miners[i].OnNoMoreMines();
-                    
-                    return false;
                 }
                 
                 return mine.minerals >= 0;
