@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace IA.FSM
+namespace IA.FSM.States
 {
     public abstract class State
     {

@@ -6,7 +6,7 @@ namespace IA.FSM
     public class FSM
     {
         public int currentStateIndex = 0;
-        Dictionary<int, State> states;
+        Dictionary<int, States.State> states;
         Dictionary<int, Func<object[]>> enterParameters;
         Dictionary<int, Func<object[]>> mainParameters;
         Dictionary<int, Func<object[]>> exitParameters;
@@ -24,7 +24,7 @@ namespace IA.FSM
                 }
             }
             
-            this.states = new Dictionary<int, State>();
+            this.states = new Dictionary<int, States.State>();
             enterParameters = new Dictionary<int, Func<object[]>>();
             mainParameters = new Dictionary<int, Func<object[]>>();
             exitParameters = new Dictionary<int, Func<object[]>>();
@@ -63,11 +63,11 @@ namespace IA.FSM
         }
 
         public void AddState<T>(int stateIndex, Func<object[]> mainParams = null,
-            Func<object[]> enterParams = null, Func<object[]> exitParams = null) where T : State, new()
+            Func<object[]> enterParams = null, Func<object[]> exitParams = null) where T : States.State, new()
         {
             if (!states.ContainsKey(stateIndex)) 
             {
-                State newState = new T();
+                States.State newState = new T();
                 newState.SetFlag += SetFlag;
                 states.Add(stateIndex, newState);
                 mainParameters.Add(stateIndex, mainParams);

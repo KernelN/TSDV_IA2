@@ -1,45 +1,44 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace IA.FSM.Miner
+namespace IA.FSM.States.Miner
 {
-    public class DepositState : State
+    public class EatState : State
     {
         //Set values
-        float depositDuration;
+        float eatDuration;
+        Vector2Int foodStoragePos;
         //Run values
         float timer;
         
         public override List<Action> GetOnEnterBehaviours(params object[] parameters)
         {
-            depositDuration = (float)parameters[0];
+            eatDuration = (float)parameters[0];
+            foodStoragePos = (Vector2Int)parameters[1];
             
-            timer = 0;
+            timer = eatDuration;
 
-            List<Action> behaviours = new List<Action>();
-            
-            behaviours.Add(() =>
-            { 
-             //Doesn't have behaviours, its just a setter
-            });
-            
-            return behaviours;
+            return new List<Action>(); //Doesn't have behaviours, its just a setter
         }
 
         public override List<Action> GetBehaviours(params object[] parameters)
         {
             float dt = (float)parameters[0];
+            Func<Vector2Int, bool> TryEat = (Func<Vector2Int, bool>)parameters[1];
             
             List<Action> behaviours = new List<Action>();
             
             behaviours.Add(() =>
             {
                 timer += dt;
-            if (timer >= depositDuration)
+            if (timer >= eatDuration)
             {
-                SetFlag((int)Flags.OnInventoryEmpty);
+                if (TryEat.Invoke(foodStoragePos))
+                {
+                    timer = 0;
+                    Transition((int)IA.FSM.Miner.Flags.OnAte);
+                }
             }
             });
             
@@ -48,7 +47,7 @@ namespace IA.FSM.Miner
 
         public override List<Action> GetOnExitBehaviours(params object[] parameters)
         {
-            return new List<Action>(); //noting to do 
+            return new List<Action>(); //noting to do
         }
 
         public override void Transition(int flag)

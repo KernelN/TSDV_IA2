@@ -1,5 +1,5 @@
 using System;
-using IA.FSM.Villager;
+using IA.FSM.States.Miner;
 using UnityEngine;
 
 namespace IA.FSM.Miner
@@ -27,6 +27,8 @@ namespace IA.FSM.Miner
         OnAte,
         OnMineEmpty,
         OnEmergency,
+        
+        OnMapUpdated,
         
         _count
     }
@@ -85,17 +87,17 @@ namespace IA.FSM.Miner
             Vector3 safePos = safePlace.position;
             Vector3 depositPos = depositPlace.position;
             
-            fsm.AddState<FollowPathState>(
+            fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToDeposit,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
                 () => new object[] { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater, (int)Flags.OnNearTarget, depositPos }
                 );
-            fsm.AddState<FollowPathState>(
+            fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToSafePlace,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
                 () => new object[] { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater, (int)Flags.OnNearTarget, safePos }
                 );
-            fsm.AddState<FollowPathState>(
+            fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToMine,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
                 () => new object[] { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater, (int)Flags.OnNearTarget },
@@ -109,10 +111,10 @@ namespace IA.FSM.Miner
                 (int)States.Eat,
                 () => new object[] { deltaTime, TryEat },
                 () => new object[] { eatDuration, minePos });
-            fsm.AddState<DepositState>(
+            fsm.AddState<IA.FSM.States.DepositState>(
                 (int)States.Deposit,
                 () => new object[] { deltaTime },
-                () => new object[] { depositDuration });
+                () => new object[] { depositDuration, (int)Flags.OnInventoryEmpty });
 
             fsm.SetCurrentStateForced((int)States.GoToMine);
         }
@@ -128,6 +130,11 @@ namespace IA.FSM.Miner
         }
         
         //Methods
+        public void Emergency()
+        {
+            fsm.SetFlag((int)Flags.OnEmergency);
+            lastStateBeforeEmergency = (States)fsm.currentStateIndex;
+        }
         public void EmergencyOver()
         {
             fsm.SetCurrentStateForced((int)lastStateBeforeEmergency);

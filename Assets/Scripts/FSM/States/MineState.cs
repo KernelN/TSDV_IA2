@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace IA.FSM.Miner
+namespace IA.FSM.States.Miner
 {
     public class MineState : State
     {
@@ -47,16 +47,16 @@ namespace IA.FSM.Miner
                     if (mineralCount >= maxMinerals)
                     {
                         mineralCount = 0;
-                        Transition((int)Flags.OnInventoryFull);
+                        Transition((int)IA.FSM.Miner.Flags.OnInventoryFull);
                     }
                     else if (mineralCount % actionsPerFood == 0)
                     {
-                        Transition((int)Flags.OnHungry);
+                        Transition((int)IA.FSM.Miner.Flags.OnHungry);
                     }
                 }
                 else
                 {
-                    SetFlag((int)Flags.OnMineEmpty);
+                    SetFlag((int)IA.FSM.Miner.Flags.OnMineEmpty);
                 }
             }
             });

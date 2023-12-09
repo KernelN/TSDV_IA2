@@ -3,43 +3,38 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace IA.FSM.Miner
+namespace IA.FSM.States
 {
-    public class EatState : State
+    public class DepositState : State
     {
         //Set values
-        float eatDuration;
-        Vector2Int foodStoragePos;
+        float depositDuration;
+        int depositFlag;
         //Run values
         float timer;
         
         public override List<Action> GetOnEnterBehaviours(params object[] parameters)
         {
-            eatDuration = (float)parameters[0];
-            foodStoragePos = (Vector2Int)parameters[1];
+            depositDuration = (float)parameters[0];
+            depositFlag = (int)parameters[1];
             
-            timer = eatDuration;
+            timer = 0;
 
-            return new List<Action>(); //Doesn't have behaviours, its just a setter
+            return new List<Action>();
         }
 
         public override List<Action> GetBehaviours(params object[] parameters)
         {
             float dt = (float)parameters[0];
-            Func<Vector2Int, bool> TryEat = (Func<Vector2Int, bool>)parameters[1];
             
             List<Action> behaviours = new List<Action>();
             
             behaviours.Add(() =>
             {
                 timer += dt;
-            if (timer >= eatDuration)
+            if (timer >= depositDuration)
             {
-                if (TryEat.Invoke(foodStoragePos))
-                {
-                    timer = 0;
-                    Transition((int)Flags.OnAte);
-                }
+                SetFlag(depositFlag);
             }
             });
             
@@ -48,7 +43,7 @@ namespace IA.FSM.Miner
 
         public override List<Action> GetOnExitBehaviours(params object[] parameters)
         {
-            return new List<Action>(); //noting to do
+            return new List<Action>(); //noting to do 
         }
 
         public override void Transition(int flag)
