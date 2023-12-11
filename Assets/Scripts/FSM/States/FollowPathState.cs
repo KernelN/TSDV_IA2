@@ -37,10 +37,16 @@ namespace IA.FSM.States
 
             behaviours.Add(() =>
             { 
-              if (parameters.Length > 7)
-                  path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
-              else
-                  path = pathManager.GetPathfinder(pathfinderIndex).FindPathToPOI(startPos);
+              Pathfinding.Voronoi.VoronoiAStarPathfinder pathFinder;
+              pathFinder = pathManager.GetPathfinder(pathfinderIndex);
+            
+              lock (pathFinder.grid.grid)
+              {
+                  if (parameters.Length > 7)
+                      path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
+                  else
+                      path = pathManager.GetPathfinder(pathfinderIndex).FindPathToPOI(startPos);
+              }
             
               if (path == null)
                   Transition(failedFlag);

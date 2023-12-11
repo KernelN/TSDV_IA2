@@ -18,6 +18,7 @@ namespace IA.FSM
             public int food = (15/3)*2;
             [Header("Runtime Values")]
             public int id;
+            public bool isActive = true;
 
             public Mine()
             {
@@ -26,6 +27,7 @@ namespace IA.FSM
                 
                 minerals = 30;
                 food = (15/3)*2;
+                isActive = true;
             }
         }
         
@@ -61,9 +63,9 @@ namespace IA.FSM
             minesByID = new Dictionary<int, Mine>();
             for (int i = 0; i < mines.Length; i++)
             {
-                Vector2Int gridPos = pathManager.GetGridPos(mines[i].t.position, 0);
-                mines[i].id = pathManager.GetPathfinder(0).FindPointRegion(gridPos);
-                minesByID.Add(mines[i].id, mines[i]);
+                mines[i].id = pathManager.GetPathfinder(0).
+                                GetPointOfInterestID(mines[i].t.position);
+                minesByID.TryAdd(mines[i].id, mines[i]);
             }
             
             SpawnMiner();
@@ -74,16 +76,21 @@ namespace IA.FSM
         void Update()
         {
             float dt = Time.deltaTime;
+            
+            Parallel.ForEach(miners, miner =>
+            { lock(miner) miner.UpdateFSM(dt); });
+            Parallel.ForEach(caravans, caravan =>
+            { lock(caravan) caravan.UpdateFSM(dt); });
+            
             for (int i = 0; i < miners.Count; i++)
-            {
-                miners[i].UpdateFSM(dt);
                 miners[i].UpdateTransform();
-            }
             for (int i = 0; i < caravans.Count; i++)
-            {
-                caravans[i].UpdateFSM(dt);
                 caravans[i].UpdateTransform();
-            }
+            
+            //Update Mines
+            for (int i = 0; i < mines.Length; i++)
+                if(mines[i].isActive != mines[i].t.gameObject.activeSelf)
+                    mines[i].t.gameObject.SetActive(mines[i].isActive);
             
             minerSpawnTimer += dt;
             if (minerSpawnTimer >= minerSpawnInterval)
@@ -148,7 +155,7 @@ namespace IA.FSM
         {
             Mine mine;
             
-            int mineID = pathManager.GetPathfinder(0).FindPointRegion(minePos);
+            int mineID = pathManager.GetPathfinder(0).GetPointOfInterestID(minePos);
             if (mineID < 0) return false;
             
             if (minesByID.TryGetValue(mineID, out mine))
@@ -162,20 +169,23 @@ namespace IA.FSM
                         minesByID.Remove(mineID);
                     
                     lock (mine)
-                        mine.t.gameObject.SetActive(false); //this needs to change
+                        mine.isActive = false;
 
                     lock (pathManager)
                         pathManager.RemovePointOfInterest(mineID, 0);
                     
                     for (int i = 0; i < miners.Count; i++)
-                        miners[i].OnMineEmpty(minePos);
+                        lock (miners[i])
+                            miners[i].OnMineEmpty(minePos);
                     
                     if(minesByID.Count <= 0)
                     {
                         for (int i = 0; i < miners.Count; i++)
-                            miners[i].OnNoMoreMines();
+                            lock (miners[i])
+                             miners[i].OnNoMoreMines();
                         for (int i = 0; i < caravans.Count; i++)
-                            caravans[i].OnNoMoreMines();
+                            lock (caravans[i])
+                                caravans[i].OnNoMoreMines();
                     }
                 }
                 
@@ -188,7 +198,7 @@ namespace IA.FSM
         {
             Mine mine;
             
-            int mineID = pathManager.GetPathfinder(0).FindPointRegion(foodStoragePos);
+            int mineID = pathManager.GetPathfinder(0).GetPointOfInterestID(foodStoragePos);
             if (mineID < 0) return false;
             
             //If founds mine and has food, eat 1 and return true
@@ -225,7 +235,7 @@ namespace IA.FSM
             {
                 int region;
             
-                region = pathManager.GetPathfinder(0).FindPointRegion(minePos);
+                region = pathManager.GetPathfinder(0).GetPointOfInterestID(minePos);
             
                 if(region < 0) return;
             
@@ -246,7 +256,7 @@ namespace IA.FSM
         {
             Mine mine;
             
-            int mineID = pathManager.GetPathfinder(1).FindPointRegion(gridPos);
+            int mineID = pathManager.GetPathfinder(1).GetPointOfInterestID(gridPos);
             if (mineID < 0) return;
             
             if (!minesByID.TryGetValue(mineID, out mine)) return;

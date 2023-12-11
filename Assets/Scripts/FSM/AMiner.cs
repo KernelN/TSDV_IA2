@@ -64,9 +64,11 @@ namespace IA.FSM.Miner
             
             fsm = new FSM((int)States._count, (int)Flags._count);
 
+            fsm.SetRelation((int)States.Idle, (int)Flags.OnMapUpdated, (int)States.GoToMine);
+
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnNearTarget, (int)States.Mine);
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMineEmpty, (int)States.GoToMine);
-            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMoveFailed, (int)States.Idle);
+            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMoveFailed, (int)States.GoToDeposit);
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.Mine, (int)Flags.OnInventoryFull, (int)States.GoToDeposit);
@@ -75,18 +77,18 @@ namespace IA.FSM.Miner
             fsm.SetRelation((int)States.Mine, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.Eat, (int)Flags.OnAte, (int)States.Mine);
-            fsm.SetRelation((int)States.Eat, (int)Flags.OnMineEmpty, (int)States.GoToMine);
+            fsm.SetRelation((int)States.Eat, (int)Flags.OnMineEmpty, (int)States.GoToDeposit);
             fsm.SetRelation((int)States.Eat, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnNearTarget, (int)States.Deposit);
-            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.Idle);
+            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.GoToDeposit);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToMine);
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
-            fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
+            //fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
 
             Action<Vector3> OnGotNewPos = newPos => 
                 nextPos = newPos;

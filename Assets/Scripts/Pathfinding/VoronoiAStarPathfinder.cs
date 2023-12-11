@@ -106,6 +106,20 @@ namespace IA.Pathfinding.Voronoi
             
             return -1;
         }
+
+        public int GetPointOfInterestID(Vector3 point)
+        {
+            Vector2Int gridPos = grid.GetGridPosition(point);
+            return GetPointOfInterestID(gridPos);
+        }
+        public int GetPointOfInterestID(Vector2Int gridPos)
+        {
+            if (pointsByPos.TryGetValue(gridPos, out PointOfInterest poi))
+                return poi.id;
+            
+            return -1;
+            
+        }
         public PathNode GetPositionOfInterest(int region)
         {
             if (currentPOIs.Count <= 0) return null;
@@ -255,8 +269,8 @@ namespace IA.Pathfinding.Voronoi
                 int regionID = currentPOIs[0].id;
                 costs.TryGetValue(regionID, out float cost);
 
-                costs.Remove(regionID);
-                costs.Add(regionID, cost);
+                // costs.Remove(regionID);
+                // costs.Add(regionID, cost);
 
                 float smallestCost = cost;
 
@@ -271,8 +285,8 @@ namespace IA.Pathfinding.Voronoi
                         cheapestPoint = regionID;
                     }
 
-                    costs.Remove(regionID);
-                    costs.Add(regionID, cost);
+                    // costs.Remove(regionID);
+                    // costs.Add(regionID, cost);
                 }
 
                 lock (regionsByNode)

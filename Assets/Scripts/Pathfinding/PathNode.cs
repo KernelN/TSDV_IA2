@@ -11,13 +11,16 @@ namespace IA.Pathfinding.Grid
         public Vector2Int gridPos;
         public int weight;
 
-        public int gCost; //Distance from start
-        public int hCost; //Distance to target
+        /// <summary> Distance from start </summary>
+        public int gCost; 
+        /// <summary> Distance to target </summary>
+        public int hCost;
         
         public PathNode parent;
         public List<PathNode> neighbours = new List<PathNode>();
         
-        public int FCost { get { return gCost + hCost; } } //Total cost
+        /// <summary> Distance to target </summary>
+        public int FCost { get { return gCost + hCost; } } 
         
         public PathNode(){ neighbours = new List<PathNode>(); }
         public PathNode(bool _walkable, Vector3 _worldPos, Vector2Int _gridPos, int _weight = 0)
