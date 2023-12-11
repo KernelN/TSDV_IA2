@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -50,8 +49,8 @@ namespace IA.FSM.States
             
               if (path == null)
                   Transition(failedFlag);
-              else if (path.Count < 2)
-                  Transition(failedFlag);
+              else if (path.Count == 1)
+                  Transition(reachedFlag); //If start and end are the same, the path will be of 1 node
             });
             
             return behaviours;

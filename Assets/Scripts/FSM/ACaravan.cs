@@ -139,7 +139,20 @@ namespace IA.FSM.Caravan
         //Methods
         public void Emergency()
         {
-            lastStateBeforeEmergency = (States)fsm.currentStateIndex;
+            //Save the right state before emergency, so it doesn't do actions in the middle of nowhere
+            //(This could be done in the fsm, polish later)
+            switch ((States)fsm.currentStateIndex)
+            {
+                case States.Deposit:
+                    lastStateBeforeEmergency = States.GoToDeposit;
+                    break;
+                case States.PackLoad:
+                    lastStateBeforeEmergency = States.GoToSource;
+                    break;
+                default:
+                    lastStateBeforeEmergency = (States)fsm.currentStateIndex;
+                    break;                    
+            }
             fsm.SetFlag((int)Flags.OnEmergency);
         }
         public void EmergencyOver()

@@ -149,7 +149,21 @@ namespace IA.FSM.Miner
         //Methods
         public void Emergency()
         {
-            lastStateBeforeEmergency = (States)fsm.currentStateIndex;
+            //Save the right state before emergency, so it doesn't do actions in the middle of nowhere
+            //(This could be done in the fsm, polish later)
+            switch ((States)fsm.currentStateIndex)
+            {
+                case States.Eat:
+                case States.Mine:
+                    lastStateBeforeEmergency = States.GoToMine;
+                    break;
+                case States.Deposit:
+                    lastStateBeforeEmergency = States.GoToDeposit;
+                    break;
+                default:
+                    lastStateBeforeEmergency = (States)fsm.currentStateIndex;
+                    break;                    
+            }
             fsm.SetFlag((int)Flags.OnEmergency);
         }
         public void EmergencyOver()

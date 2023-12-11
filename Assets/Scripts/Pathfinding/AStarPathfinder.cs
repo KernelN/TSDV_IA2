@@ -39,6 +39,9 @@ namespace IA.Pathfinding.AStar
         }
         public List<PathNode> FindPath(PathNode startNode, PathNode targetNode)
         {
+            if(startNode == targetNode)
+                return new List<PathNode>{startNode};
+            
             List<PathNode> openList = new List<PathNode>();
             List<PathNode> closedList = new List<PathNode>();
             

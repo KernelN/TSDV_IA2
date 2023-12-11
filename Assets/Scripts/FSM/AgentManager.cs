@@ -39,20 +39,15 @@ namespace IA.FSM
         [Header("Miner Settings")]
         [SerializeField] Miner.AMiner minerTemplate;
         [SerializeField] GameObject minerPrefab;
-        [SerializeField] int maxMiners = 10;
-        [SerializeField] float minerSpawnInterval;
         [Header("Caravan Settings")]
         [SerializeField] Caravan.ACaravan caravanTemplate;
         [SerializeField] GameObject caravanPrefab;
-        [SerializeField] int maxCaravans = 3;
-        [SerializeField] float caravanSpawnInterval;
         //[Header("Runtime Values")]
         List<Miner.AMiner> miners;
         List<Caravan.ACaravan> caravans;
-        float minerSpawnTimer;
-        float caravanSpawnTimer;
         float mineCheckTimer;
         Dictionary<int, Mine> minesByID;
+        bool isOnEmergency;
 
         //Unity Events
         void Start()
@@ -92,18 +87,6 @@ namespace IA.FSM
                 if(mines[i].isActive != mines[i].t.gameObject.activeSelf)
                     mines[i].t.gameObject.SetActive(mines[i].isActive);
             
-            minerSpawnTimer += dt;
-            if (minerSpawnTimer >= minerSpawnInterval)
-            {
-                minerSpawnTimer = 0;
-                SpawnMiner();
-            }
-            caravanSpawnTimer += dt;
-            if (caravanSpawnTimer >= caravanSpawnInterval)
-            {
-                caravanSpawnTimer = 0;
-                SpawnCaravan();
-            }
             mineCheckTimer += dt;
             if (mineCheckTimer >= mineInUseCheckInterval)
             {
@@ -113,10 +96,24 @@ namespace IA.FSM
         }
         
         //Methods
-        void SpawnMiner()
+        public void SetEmergency()
         {
-            if(miners.Count >= maxMiners) return;
+            isOnEmergency = !isOnEmergency;
             
+            Parallel.ForEach(miners, miner =>
+            {
+                if(isOnEmergency) lock(miner) miner.Emergency();
+                else lock(miner) miner.EmergencyOver();
+            });
+            
+            Parallel.ForEach(caravans, caravan =>
+            {
+                if(isOnEmergency) lock(caravan) caravan.Emergency();
+                else lock(caravan) caravan.EmergencyOver();
+            });
+        }
+        public void SpawnMiner()
+        {
             Miner.AMiner miner = new Miner.AMiner();
 
             miner.moveSpeed = minerTemplate.moveSpeed;
@@ -133,10 +130,8 @@ namespace IA.FSM
             
             miners.Add(miner);
         }
-        void SpawnCaravan()
+        public void SpawnCaravan()
         {
-            if(caravans.Count >= maxCaravans) return;
-            
             Caravan.ACaravan caravan = new Caravan.ACaravan();
 
             caravan.moveSpeed = caravanTemplate.moveSpeed;
