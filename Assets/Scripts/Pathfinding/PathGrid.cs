@@ -25,7 +25,7 @@ namespace IA.Pathfinding.Grid
         public float NodeDiameter { get { return nodeRadius * 2; } }
         
         //Unity Methods
-        public void Set(Transform gridTransform, Vector2 gridWorldSize)
+        public void Set(Transform gridTransform, Vector2 gridWorldSize, PathNode[,] savedGrid = null)
         {
             gridT = gridTransform;
             this.gridWorldSize = gridWorldSize;
@@ -46,7 +46,10 @@ namespace IA.Pathfinding.Grid
                 terrainsDictionary.Add(layerIndex, terrains[i].weight); 
             }
             
-            CreateGrid();
+            if(savedGrid == null)
+                CreateGrid();
+            else
+                grid = savedGrid;
         }
         public void DrawGizmos(Transform gridT, Vector2Int gridWorldSize)
         {

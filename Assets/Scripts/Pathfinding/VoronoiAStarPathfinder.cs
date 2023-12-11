@@ -66,6 +66,50 @@ namespace IA.Pathfinding.Voronoi
             
             CalculateVoronoi();
         }
+        public void Load(PathGrid grid, Dictionary<Vector2Int, Dictionary<int, float>> regionsCostByNode)
+        {
+            base.Set(grid);
+
+            currentPOIs = new List<PointOfInterest>();
+            pointsByPos = new Dictionary<Vector2Int, PointOfInterest>();
+            pointsById = new Dictionary<int, PointOfInterest>();
+            
+            regionsByNode = new Dictionary<Vector2Int, int>();
+            
+            if(regionsCostByNode == null)
+                this.regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
+            else
+                this.regionsCostByNode = regionsCostByNode;
+
+            //Set positions of interest
+            for (int i = 0; i < pointsOfInterest.Count; i++)
+            {
+                if (pointsOfInterest[i].t == null)
+                {
+                    Debug.LogError("Point of interest " + i + " has no transform");
+                    continue;
+                }
+                
+                pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
+                pointsOfInterest[i].gridPos = grid.GetGridPosition(pointsOfInterest[i].t.position);
+                pointsById.Add(pointsOfInterest[i].id, pointsOfInterest[i]);
+                pointsByPos.Add(pointsOfInterest[i].gridPos, pointsOfInterest[i]);
+            }
+            
+            if(addAllPOIAtStart)
+                currentPOIs.AddRange(pointsOfInterest);
+            
+            if(regionsCostByNode == null)
+                CalculateVoronoi();
+            else
+            {
+                UpdateVoronoi();
+            }
+            
+#if UNITY_EDITOR
+                SetGizmoColors();
+#endif
+        }
         public void DrawGizmos()
         {
             if(regionsByNode == null) return;
@@ -106,7 +150,6 @@ namespace IA.Pathfinding.Voronoi
             
             return -1;
         }
-
         public int GetPointOfInterestID(Vector3 point)
         {
             Vector2Int gridPos = grid.GetGridPosition(point);
@@ -210,6 +253,12 @@ namespace IA.Pathfinding.Voronoi
             #if UNITY_EDITOR //UPDATE GIZMO COLORS
             SetGizmoColors();
             #endif
+        }
+        public Dictionary<Vector2Int, Dictionary<int, float>> GetRegionsCostByNode()
+        {
+            Dictionary<Vector2Int, Dictionary<int, float>> copy;
+            copy = regionsCostByNode;
+            return copy;
         }
         
         //Private Methods

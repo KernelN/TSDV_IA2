@@ -4,11 +4,12 @@ using UnityEngine;
 
 namespace IA.Pathfinding.Grid
 {
+    [System.Serializable]
     public class PathNode
     {
         public bool walkable;
-        public Vector3 worldPos;
-        public Vector2Int gridPos;
+        public Universal.FileManaging.Vec3 worldPos;
+        public Universal.FileManaging.Vec2Int gridPos;
         public int weight;
 
         /// <summary> Distance from start </summary>
