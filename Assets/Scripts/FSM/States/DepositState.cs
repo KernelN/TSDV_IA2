@@ -12,6 +12,7 @@ namespace IA.FSM.States
         int depositFlag;
         //Run values
         float timer;
+        bool deposited;
         
         public override List<Action> GetOnEnterBehaviours(params object[] parameters)
         {
@@ -19,6 +20,7 @@ namespace IA.FSM.States
             depositFlag = (int)parameters[1];
             
             timer = 0;
+            deposited = false;
 
             return new List<Action>();
         }
@@ -34,6 +36,7 @@ namespace IA.FSM.States
                 timer += dt;
             if (timer >= depositDuration)
             {
+                deposited = true;
                 SetFlag(depositFlag);
             }
             });
@@ -43,7 +46,21 @@ namespace IA.FSM.States
 
         public override List<Action> GetOnExitBehaviours(params object[] parameters)
         {
-            return new List<Action>(); //noting to do 
+            if(parameters == null) return new List<Action>();
+            if(parameters.Length <= 0) return new List<Action>();
+            
+            Action depositSuccess = (Action)parameters[0];
+            
+            List<Action> behaviours = new List<Action>();
+            
+            behaviours.Add(() =>
+            {
+                if(deposited)
+                    depositSuccess?.Invoke();
+                deposited = false;
+            });
+            
+            return behaviours;
         }
 
         public override void Transition(int flag)

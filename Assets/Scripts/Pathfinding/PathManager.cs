@@ -12,8 +12,7 @@ namespace IA.Pathfinding
         [SerializeField] Grid.PathGrid[] grids;
         [SerializeField] Voronoi.VoronoiAStarPathfinder[] pathfinders;
         [Header("DEBUG")]
-        [SerializeField, Min(0)] int gridGizmo;
-        [SerializeField, Min(0)] int pathfinderGizmo;
+        [SerializeField, Min(0)] int gizmosIndex;
         
         void Awake()
         {
@@ -30,10 +29,10 @@ namespace IA.Pathfinding
         void OnDrawGizmos()
         {
             if(grids.Length > 0)
-                grids[gridGizmo].DrawGizmos(gridTransform, gridWorldSize);
+                grids[gizmosIndex].DrawGizmos(gridTransform, gridWorldSize);
             
             if(pathfinders.Length > 0)
-                pathfinders[pathfinderGizmo].DrawGizmos();
+                pathfinders[gizmosIndex].DrawGizmos();
         }
 
         public Voronoi.VoronoiAStarPathfinder GetPathfinder(int index)
@@ -48,11 +47,18 @@ namespace IA.Pathfinding
         {
             return grids[index].NodeFromWorldPoint(worldPos).gridPos;
         }
-        public void RemovePointOfInterest(Vector2Int worldPos)
+        public void RemovePointOfInterest(Vector2Int gridPos, int layer)
+        {
+            int poiIndex;
+            poiIndex = pathfinders[layer].FindPointRegion(gridPos);
+            
+            RemovePointOfInterest(poiIndex, layer);
+        }
+        public void RemovePointOfInterest(int id, int layer)
         {
             for (int i = 0; i < pathfinders.Length; i++)
             {
-                pathfinders[i].RemovePointOfInterest(worldPos);
+                pathfinders[i].RemovePointOfInterest(id);
             }
         }
     }

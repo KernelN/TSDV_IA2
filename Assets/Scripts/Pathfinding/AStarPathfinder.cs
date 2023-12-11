@@ -27,10 +27,15 @@ namespace IA.Pathfinding.AStar
         //Methods
         public List<PathNode> FindPath(Vector3 startPos, Vector3 targetPos)
         {
+            //If path is from A to A, return list with A node
+            if(startPos == targetPos)
+                return new List<PathNode>{grid.NodeFromWorldPoint(startPos)};
+            
             PathNode startNode = grid.NodeFromWorldPoint(startPos);
             PathNode targetNode = grid.NodeFromWorldPoint(targetPos);
          
-            return FindPath(startNode, targetNode);
+            //lock(grid.grid)
+                return FindPath(startNode, targetNode);
         }
         public List<PathNode> FindPath(PathNode startNode, PathNode targetNode)
         {

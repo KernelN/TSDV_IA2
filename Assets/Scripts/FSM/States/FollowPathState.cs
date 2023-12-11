@@ -12,6 +12,7 @@ namespace IA.FSM.States
         float speed;
         float nodeDiameter;
         int reachedFlag;
+        int failedFlag;
         //Run values
         int currentNode;
         
@@ -20,13 +21,15 @@ namespace IA.FSM.States
             Pathfinding.PathManager pathManager = (Pathfinding.PathManager)parameters[0];
             int pathfinderIndex = (int)parameters[1];
             Vector3 startPos = (Vector3)parameters[2];
+            
             speed = (float)parameters[3];
             nodeDiameter = (float)parameters[4];
             reachedFlag = (int)parameters[5];
+            failedFlag = (int)parameters[6];
 
             Vector3 targetPos = Vector3.zero;
-            if (parameters.Length > 6)
-                targetPos = (Vector3)parameters[6];
+            if (parameters.Length > 7)
+                targetPos = (Vector3)parameters[7];
             
             currentNode = 0;
             
@@ -34,10 +37,16 @@ namespace IA.FSM.States
 
             behaviours.Add(() =>
             { 
-              if (parameters.Length > 6)
+              if (parameters.Length > 7)
                   path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
               else
-                  path = pathManager.GetPathfinder(pathfinderIndex).FindPathToPOI(startPos); });
+                  path = pathManager.GetPathfinder(pathfinderIndex).FindPathToPOI(startPos);
+            
+              if (path == null)
+                  Transition(failedFlag);
+              else if (path.Count < 2)
+                  Transition(failedFlag);
+            });
             
             return behaviours;
         }
@@ -51,22 +60,22 @@ namespace IA.FSM.States
             List<Action> behaviours = new List<Action>();
             
             behaviours.Add(() =>
-            {
-                if (currentNode < path.Count - 1)
-                {
-                    Vector3 movement = path[currentNode + 1].worldPos - pos;
-                    pos += movement.normalized * (speed * dt);
+            { 
+              if (currentNode < path.Count - 1)
+              {
+                  Vector3 movement = path[currentNode + 1].worldPos - pos;
+                  pos += movement.normalized * (speed * dt);
 
-                    if (Vector3.Distance(pos, path[currentNode + 1].worldPos) < nodeDiameter)
-                        currentNode++;
-                    
-                    getNewPos?.Invoke(pos);
-                }
-                else
-                {
-                    getNewPos?.Invoke(path[^1].worldPos);
-                    Transition(reachedFlag);
-                }
+                  if (Vector3.Distance(pos, path[currentNode + 1].worldPos) < nodeDiameter)
+                      currentNode++;
+
+                  getNewPos?.Invoke(pos);
+              }
+              else
+              {
+                  getNewPos?.Invoke(path[^1].worldPos);
+                  Transition(reachedFlag);
+              }
             });
             
             return behaviours;
@@ -78,13 +87,17 @@ namespace IA.FSM.States
             if(parameters == null) return new List<Action>();
             if(parameters.Length <= 0) return new List<Action>();
             
+            //If path follower has an exit behaviour, but failed to find path, exit
+            if(path == null) return new List<Action>();
+            if(path.Count < 2) return new List<Action>();
+            
             Action<Vector2Int> destinyGridPos = (Action<Vector2Int>)parameters[0];
             
             List<Action> behaviours = new List<Action>();
             
             behaviours.Add(() =>
-            {
-                destinyGridPos?.Invoke(path[^1].gridPos);
+            { if (path == null) return;
+              destinyGridPos?.Invoke(path[^1].gridPos);
             });
             
             return behaviours;

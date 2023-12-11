@@ -1,15 +1,15 @@
 using System;
-using IA.FSM.States.Miner;
+using IA.FSM.States.Caravan;
 using UnityEngine;
 
-namespace IA.FSM.Miner
+namespace IA.FSM.Caravan
 {
+    
     public enum States
     {
         Idle,
-        GoToMine,
-        Mine,
-        Eat,
+        GoToSource,
+        PackLoad,
         GoToDeposit,
         Deposit,
         GoToSafePlace,
@@ -24,9 +24,6 @@ namespace IA.FSM.Miner
         OnMoveFailed,
         OnInventoryEmpty,
         OnInventoryFull,
-        OnHungry,
-        OnAte,
-        OnMineEmpty,
         OnEmergency,
         
         OnMapUpdated,
@@ -35,12 +32,11 @@ namespace IA.FSM.Miner
     }
     
     [Serializable]
-    public class AMiner
+    public class ACaravan
     {
         [Header("Set Values")]
         public float moveSpeed;
-        public float mineInterval;
-        public float eatDuration;
+        public float loadDuration;
         public float depositDuration;
         Transform transform;
         //[Header("Runtime Values")]
@@ -49,89 +45,85 @@ namespace IA.FSM.Miner
         float deltaTime;
         Vector3 pos;
         Vector3 nextPos;
-        
-        public Vector2Int minePos { get; private set; }
-        public bool hasMine { get; private set; }
+        Vector2Int minePos;
 
+        public Action<Vector2Int> onDepositSuccess;
         
         //Unity Methods
         public void Set(Pathfinding.PathManager pathManager, int pathfinderIndex, 
-                    Transform safePlace, Transform depositPlace, Transform transform,
-                        Func<Vector2Int, bool> TryMine, Func<Vector2Int, bool> TryEat)
+                    Transform safePlace, Transform depositPlace, Transform transform)
         {
             this.transform = transform;
             pos = transform.position;
+            nextPos = pos;
             
             fsm = new FSM((int)States._count, (int)Flags._count);
 
-            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnNearTarget, (int)States.Mine);
-            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMineEmpty, (int)States.GoToMine);
-            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMoveFailed, (int)States.Idle);
-            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            fsm.SetRelation((int)States.Idle, (int)Flags.OnMapUpdated, (int)States.GoToDeposit);
+            
+            fsm.SetRelation((int)States.GoToSource, (int)Flags.OnNearTarget, (int)States.PackLoad);
+            fsm.SetRelation((int)States.GoToSource, (int)Flags.OnMoveFailed, (int)States.Idle);
+            fsm.SetRelation((int)States.GoToSource, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            fsm.SetRelation((int)States.GoToSource, (int)Flags.OnMapUpdated, (int)States.GoToSource);
 
-            fsm.SetRelation((int)States.Mine, (int)Flags.OnInventoryFull, (int)States.GoToDeposit);
-            fsm.SetRelation((int)States.Mine, (int)Flags.OnHungry, (int)States.Eat);
-            fsm.SetRelation((int)States.Mine, (int)Flags.OnMineEmpty, (int)States.GoToMine);
-            fsm.SetRelation((int)States.Mine, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
-
-            fsm.SetRelation((int)States.Eat, (int)Flags.OnAte, (int)States.Mine);
-            fsm.SetRelation((int)States.Eat, (int)Flags.OnMineEmpty, (int)States.GoToMine);
-            fsm.SetRelation((int)States.Eat, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            fsm.SetRelation((int)States.PackLoad, (int)Flags.OnInventoryFull, (int)States.GoToDeposit);
+            fsm.SetRelation((int)States.PackLoad, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnNearTarget, (int)States.Deposit);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.Idle);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMapUpdated, (int)States.GoToDeposit);
 
-            fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToMine);
+            fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToSource);
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
+            fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMapUpdated, (int)States.GoToSafePlace);
 
-            Action<Vector3> OnGotNewPos = newPos => 
-                nextPos = newPos;
-            Action<Vector2Int> GetMineGridPos = gridPos =>
-            { minePos = gridPos; hasMine = true; };
+            Action<Vector3> OnGotNewPos = 
+                newPos => nextPos = newPos;
+            Action<Vector2Int> GetMineGridPos = 
+                gridPos => minePos = gridPos;
+            Action OnDepositSuccess = 
+                () => onDepositSuccess?.Invoke(minePos);
             float nodeDiamater = pathManager.GetNodeDiameter(pathfinderIndex);
             Vector3 safePos = safePlace.position;
-            Vector3 depositPos = depositPlace.position;
+            Vector3 sourcePos = depositPlace.position;
             
             fsm.AddState<IA.FSM.States.FollowPathState>(
-                (int)States.GoToDeposit,
+                (int)States.GoToSource,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
                 () => new object[] 
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
-                        (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, depositPos }
+                    (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, sourcePos }
                 );
             fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToSafePlace,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
                 () => new object[] 
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
-                        (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, safePos }
+                    (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, safePos }
                 );
             fsm.AddState<IA.FSM.States.FollowPathState>(
-                (int)States.GoToMine,
+                (int)States.GoToDeposit,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
-                () => new object[] 
+                () => new object[]
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
                     (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed },
                 () => new object[] { GetMineGridPos }
                 );
-            fsm.AddState<MineState>(
-                (int)States.Mine,
-                () => new object[] { deltaTime, TryMine },
-                () => new object[] { mineInterval, 3, 15, minePos }); //3 actions per food, 15 max minerals
-            fsm.AddState<EatState>(
-                (int)States.Eat,
-                () => new object[] { deltaTime, TryEat },
-                () => new object[] { eatDuration, minePos });
+            fsm.AddState<PackLoadState>(
+                (int)States.PackLoad,
+                () => new object[] { deltaTime },
+                () => new object[] { loadDuration });
             fsm.AddState<IA.FSM.States.DepositState>(
                 (int)States.Deposit,
                 () => new object[] { deltaTime },
-                () => new object[] { depositDuration, (int)Flags.OnInventoryEmpty });
+                () => new object[] { depositDuration, (int)Flags.OnInventoryEmpty },
+                () => new object[] { OnDepositSuccess });
 
-            fsm.SetCurrentStateForced((int)States.GoToMine);
+            fsm.SetCurrentStateForced((int)States.Idle);
         }
         public void UpdateFSM(float dt)
         {
@@ -161,11 +153,6 @@ namespace IA.FSM.Miner
         public void OnNoMoreMines()
         {
             fsm.SetCurrentStateForced((int)States.Idle);
-        }
-        public void OnMineEmpty(Vector2Int emptyMinePos)
-        {
-            if (emptyMinePos != minePos) return;
-            fsm.SetFlag((int)Flags.OnMineEmpty);
         }
     }
 }

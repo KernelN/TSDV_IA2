@@ -50,16 +50,18 @@ namespace IA.FSM
 
         public void SetFlag(int flag)
         {
-            if (relations[currentStateIndex, flag] != -1)
-            {
-                foreach (Action OnExit in states[currentStateIndex].GetOnExitBehaviours(exitParameters[currentStateIndex]?.Invoke()))
+            if (relations[currentStateIndex, flag] == -1) return;
+
+            if (states.TryGetValue(currentStateIndex, out States.State state))
+                foreach (Action OnExit in state.GetOnExitBehaviours(exitParameters[currentStateIndex]?.Invoke()))
                     OnExit?.Invoke();
+            
+            currentStateIndex = relations[currentStateIndex, flag];
 
-                currentStateIndex = relations[currentStateIndex, flag];
-
-                foreach (Action OnEnter in states[currentStateIndex].GetOnEnterBehaviours(enterParameters[currentStateIndex]?.Invoke()))
-                    OnEnter?.Invoke();
-            }
+            if (!states.TryGetValue(currentStateIndex, out  state)) return;
+            
+            foreach (Action OnEnter in states[currentStateIndex].GetOnEnterBehaviours(enterParameters[currentStateIndex]?.Invoke()))
+                OnEnter?.Invoke();
         }
 
         public void AddState<T>(int stateIndex, Func<object[]> mainParams = null,
@@ -78,12 +80,11 @@ namespace IA.FSM
 
         public void Update()
         {
-            if (states.ContainsKey(currentStateIndex))
+            if (!states.TryGetValue(currentStateIndex, out States.State state)) return;
+
+            foreach (Action behaviour in state.GetBehaviours(mainParameters[currentStateIndex]?.Invoke()))
             {
-                foreach (Action behaviour in states[currentStateIndex].GetBehaviours(mainParameters[currentStateIndex]?.Invoke()))
-                {
-                    behaviour?.Invoke();
-                }
+                behaviour?.Invoke();
             }
         }
     }

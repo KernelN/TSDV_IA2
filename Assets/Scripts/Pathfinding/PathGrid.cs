@@ -53,7 +53,7 @@ namespace IA.Pathfinding.Grid
             //Draw grid
             Vector3 worldSize = new Vector3(gridWorldSize.x, 1, gridWorldSize.y);
             Gizmos.DrawWireCube(gridT.position, worldSize);
-            
+
             //If grid is not initialized, draw scheme of nodes
             if (grid == null)
             {
@@ -61,53 +61,57 @@ namespace IA.Pathfinding.Grid
                 Vector3 lineStart;
                 Vector3 lineEnd;
                 Vector3 worldBotLeft = gridT.position;
-                worldBotLeft.y = gridT.localScale.y*.55f;
+                worldBotLeft.y = gridT.localScale.y * .55f;
                 worldBotLeft -= Vector3.right * gridWorldSize.x / 2;
                 worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
                 for (int x = 0; x <= gridWorldSize.x / (NodeDiameter); x++)
                 {
                     lineStart = worldBotLeft;
                     lineEnd = worldBotLeft;
-                    
+
                     float xPos = x * NodeDiameter;
                     lineStart += new Vector3(xPos, 0, 0);
                     lineEnd += new Vector3(xPos, 0, gridWorldSize.y);
-                    
+
                     Gizmos.DrawLine(lineStart, lineEnd);
                 }
+
                 for (int y = 0; y <= gridWorldSize.y / (NodeDiameter); y++)
                 {
-                    
                     lineStart = worldBotLeft;
                     lineEnd = worldBotLeft;
 
                     float yPos = y * NodeDiameter;
                     lineStart += new Vector3(0, 0, yPos);
                     lineEnd += new Vector3(gridWorldSize.x, 0, yPos);
-                    
+
                     Gizmos.DrawLine(lineStart, lineEnd);
                 }
+
                 return;
             }
-            
+
             //Draw nodes
-            float nodeSize = NodeDiameter*.9f;
+            float nodeSize = NodeDiameter * .9f;
             Vector3 nodeWorldSize = new Vector3(nodeSize, nodeHeight, nodeSize);
-            PathNode playerNode = NodeFromWorldPoint(player.position);
+            PathNode playerNode = null;
+            if (player)
+                playerNode = NodeFromWorldPoint(player.position);
+            
             for (int x = 0; x < gridSize.x; x++)
             {
                 for (int y = 0; y < gridSize.y; y++)
                 {
                     PathNode node = grid[x, y];
-                    
-                    if(node == playerNode)
+
+                    if (node == playerNode)
                         Gizmos.color = Color.cyan;
                     else if (!node.walkable)
                         Gizmos.color = Color.red;
                     else
-                        Gizmos.color = Color.Lerp(Color.white, Color.black, 
-                                                       (float)node.weight / maxNodeWeight);
-                    
+                        Gizmos.color = Color.Lerp(Color.white, Color.black,
+                            (float)node.weight / maxNodeWeight);
+
                     Gizmos.DrawCube(node.worldPos, nodeWorldSize);
                 }
             }
