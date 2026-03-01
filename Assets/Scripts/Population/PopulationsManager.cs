@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using IA.Agent;
+using IA.Math;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -15,6 +16,8 @@ namespace IA.Population
     
     public class PopulationsManager : MonoBehaviour
     {
+        const int MinGridSize = 100;
+
         [SerializeField] Game.Map map;
         [SerializeField] int divineInterventionsPerAutosave = 10;
         [SerializeField] bool autoSave;
@@ -50,6 +53,13 @@ namespace IA.Population
                 Destroy(this);
             else
                 PopulationsManager.Instance = this;
+        }
+        void OnValidate()
+        {
+            if (map == null) return;
+
+            map.width = Mathf.Max(MinGridSize, map.width);
+            map.height = Mathf.Max(MinGridSize, map.height);
         }
         public void Update()
         {
@@ -154,6 +164,10 @@ namespace IA.Population
             //Manage food eating
             bool bothPopsCanSeeEnemies = pop1.Stage >= Stage.Enemies && pop2.Stage >= Stage.Enemies;
             bool bothPopsCanSeeAllies = pop1.Stage >= Stage.Allies && pop2.Stage >= Stage.Allies;
+
+            if (bothPopsCanSeeEnemies)
+                ResolveNonFoodEnemyCollisions();
+
             while (map.foodTaken.Count > 0)
             {
                 List<AgentBase> agents = map.foodTaken.Values.First();
@@ -337,6 +351,84 @@ namespace IA.Population
                 GenerationChanged?.Invoke();
                 //break;
             }
+        }
+
+        void ResolveNonFoodEnemyCollisions()
+        {
+            List<(AgentBase team1, AgentBase team2)> conflicts = new List<(AgentBase, AgentBase)>();
+
+            for (int i = 0; i < map.population1.Count; i++)
+            {
+                AgentBase team1Agent = map.population1[i];
+                Vec2 pos = team1Agent.position;
+
+                if (IsFoodOnPosition(pos)) continue;
+
+                for (int j = 0; j < map.population2.Count; j++)
+                {
+                    AgentBase team2Agent = map.population2[j];
+                    if (team2Agent.position != pos) continue;
+
+                    conflicts.Add((team1Agent, team2Agent));
+                    break;
+                }
+            }
+
+            for (int i = 0; i < conflicts.Count; i++)
+            {
+                AgentBase team1Agent = conflicts[i].team1;
+                AgentBase team2Agent = conflicts[i].team2;
+
+                if (!map.population1.Contains(team1Agent) || !map.population2.Contains(team2Agent))
+                    continue;
+
+                if (team1Agent.position != team2Agent.position || IsFoodOnPosition(team1Agent.position))
+                    continue;
+
+                ResolveNonFoodEnemyConflict(team1Agent, team2Agent);
+            }
+        }
+
+        void ResolveNonFoodEnemyConflict(AgentBase agentA, AgentBase agentB)
+        {
+            bool agentAFlees = agentA.willFleeAgainstEnemy;
+            bool agentBFlees = agentB.willFleeAgainstEnemy;
+
+            if (agentAFlees && agentBFlees)
+            {
+                agentA.ReturnToLastPos();
+                agentB.ReturnToLastPos();
+                return;
+            }
+
+            if (!agentAFlees && !agentBFlees)
+            {
+                float deathChance = Random.Range(0f, 1f);
+                if (deathChance < 0.5f)
+                    agentA.Die();
+                else
+                    agentB.Die();
+
+                return;
+            }
+
+            AgentBase fleeingAgent = agentAFlees ? agentA : agentB;
+            fleeingAgent.ReturnToLastPos();
+
+            float fleeSurvival = Random.Range(0f, 1f);
+            if (fleeSurvival < 0.75f)
+                fleeingAgent.Die();
+        }
+
+        bool IsFoodOnPosition(IA.Math.Vec2 position)
+        {
+            for (int i = 0; i < map.food.Count; i++)
+            {
+                if (map.food[i] == position)
+                    return true;
+            }
+
+            return false;
         }
         void CreateFood()
         {
