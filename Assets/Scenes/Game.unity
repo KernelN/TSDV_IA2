@@ -894,29 +894,29 @@ MonoBehaviour:
   TurnsPerGeneration: 125
   InitialPopulationCount: 20
   pop1:
-    MutationChance: 0.2
-    MutationRate: 0.1
+    MutationChance: 0.1
+    MutationRate: 0.2
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 2
+    InputsCount: 7
     OutputsCount: 4
-    HiddenLayers: 8
-    NeuronsCountPerHL: 45
-    Bias: -7
-    P: 0.3
+    HiddenLayers: 7
+    NeuronsCountPerHL: 15
+    Bias: -0.68
+    P: 0.5
     EnemiesAvgFitness: 100
     AlliesAvgFitness: 100
   pop2:
-    MutationChance: 0.2
-    MutationRate: 0.1
+    MutationChance: 0.1
+    MutationRate: 0.4
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 2
+    InputsCount: 7
     OutputsCount: 4
-    HiddenLayers: 8
-    NeuronsCountPerHL: 45
-    Bias: -7
-    P: 0.3
+    HiddenLayers: 7
+    NeuronsCountPerHL: 15
+    Bias: -0.68
+    P: 0.5
     EnemiesAvgFitness: 100
     AlliesAvgFitness: 100
 --- !u!4 &1500092832

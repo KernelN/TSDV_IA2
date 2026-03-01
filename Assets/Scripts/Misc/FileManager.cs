@@ -15,11 +15,8 @@ namespace Universal.FileManaging
         }
         public static void SaveDataToJson(T objectToSave, string dataPath)
         {
-            BinaryFormatter bf = new BinaryFormatter();
-            FileStream file = File.Create(dataPath);
             string json = JsonUtility.ToJson(objectToSave);
-            bf.Serialize(file, json);
-            file.Close();
+            File.WriteAllText(dataPath, json);
         }
         public static T LoadDataFromFile(string dataPath)
         {

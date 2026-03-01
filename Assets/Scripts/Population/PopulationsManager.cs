@@ -20,7 +20,9 @@ namespace IA.Population
 
         [SerializeField] Game.Map map;
         [SerializeField] int divineInterventionsPerAutosave = 10;
+        [SerializeField] int successGensPerAutosave = 100;
         [SerializeField] bool autoSave;
+        [SerializeField] string savePrefix;
         
         [Header("Population")]
         [SerializeField, Min(3)] int TurnsPerGeneration = 50;
@@ -29,6 +31,7 @@ namespace IA.Population
         [SerializeField] PopulationManager pop2;
 
         int divineInterventions;
+        int successGens;
         float turnTimer;
         bool isRunning;
 
@@ -133,13 +136,23 @@ namespace IA.Population
             
             pop1Data.stage = (int)this.pop1.Stage;
             pop2Data.stage = (int)this.pop2.Stage;
+
+            string versionAndPrefixFolder = Application.version;
+            if (!System.String.IsNullOrWhiteSpace(savePrefix))
+                versionAndPrefixFolder += "-" + savePrefix;
+            string root = System.IO.Path.Combine(Application.persistentDataPath, versionAndPrefixFolder);
+
+            if (!System.IO.Directory.Exists(root))
+                System.IO.Directory.CreateDirectory(root);
             
-            string dataPath = Application.persistentDataPath + "_pop1Data_" + fileName + ".bin";
+            string dataPath = System.IO.Path.Combine(root, fileName +"_pop1Data" + ".bin");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
+            dataPath = System.IO.Path.Combine(root, fileName + "_pop1Json" + ".json");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop1Data, dataPath);
             
-            dataPath = Application.persistentDataPath + "_pop2Data_" + fileName + ".bin";
+            dataPath = System.IO.Path.Combine(root, fileName + "_pop2Data" + ".bin");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop2Data, dataPath);
+            dataPath = System.IO.Path.Combine(root, fileName + "_pop2Json" + ".json");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop2Data, dataPath);
         }
         public void LoadPopulations(string fileName)
@@ -149,10 +162,11 @@ namespace IA.Population
             PopulationData pop1Data = new PopulationData();
             PopulationData pop2Data = new PopulationData();
             
-            string dataPath = Application.persistentDataPath + "_pop1Data_" + fileName + ".bin";
+            string root = System.IO.Path.Combine(Application.persistentDataPath);
+            string dataPath = System.IO.Path.Combine(root, fileName + "_pop1Data" + ".bin");
             pop1Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
             
-            dataPath = Application.persistentDataPath + "_pop2Data_" + fileName + ".bin";
+            dataPath = System.IO.Path.Combine(root, fileName + "_pop2Data" + ".bin");
             pop2Data = Universal.FileManaging.FileManager<PopulationData>.LoadDataFromFile(dataPath);
             
             pop1.Repopulate(pop1Data.genomes, (Stage)pop1Data.stage);
@@ -296,8 +310,9 @@ namespace IA.Population
                 if (!(pop1Survived || pop2Survived))
                 {
                     divineInterventions++;
+                    successGens = 0;
                     if(autoSave && divineInterventions % divineInterventionsPerAutosave == 0)
-                        SavePopulations("DI_N" + divineInterventions, pop1Gs, pop2Gs);
+                        SavePopulations("DI" + divineInterventions, pop1Gs, pop2Gs);
                     
                     
                     List<GeneAlgo.Genome> bestOfBest = new List<GeneAlgo.Genome>();
@@ -339,6 +354,10 @@ namespace IA.Population
                     GenerationChanged?.Invoke();
                     return;
                 }
+
+                successGens++;
+                if (autoSave && successGens % successGensPerAutosave == 0)
+                    SavePopulations("DI" + divineInterventions + "_GEN" + successGens, pop1Gs, pop2Gs);
                     
                 //If only one population survived, repopulate the other with random genes of the survivor
                 if(!pop1Survived)

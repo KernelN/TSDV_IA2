@@ -41,7 +41,8 @@ namespace IA.Math
 
         #region Methods
         public float Magnitude() { return Mathf.Sqrt(x * x + y * y); }
-        public int SqrMagnitude() { return x * x + y * y; }
+        public float SqrMagnitude() { return x * x + y * y; }
+        public int IntSqrMagnitude() { return x * x + y * y; }
         public Vector2 Normalized()
         {
             Vector2 normalized = new Vector2();

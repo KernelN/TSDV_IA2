@@ -22,11 +22,14 @@ namespace IA.Agent
         protected int generation;
         protected float fitness;
         int lastDistToFood;
+        Vec2 lastDir;
         
         //Fitness Values
         int moved;
         int stayedStill;
         int gotCloserToFood;
+        int gotAwayFromFood;
+        int movedStraight;
         int foodsLost;
         float foodCount;
 
@@ -107,23 +110,33 @@ namespace IA.Agent
         }
         public void CalcFitness()
         {
-            fitness += .15f * gotCloserToFood;
-            //fitness -= .005f * gotAwayFromFood;
+            // if(stayedStill > 0)
+            //     fitness *= UnityEngine.Mathf.Pow(.65f, stayedStill);
             
-            if(stayedStill > 0)
-                fitness *= UnityEngine.Mathf.Pow(.65f, stayedStill);
+            fitness += 5 * gotCloserToFood;
+            if(movedStraight > 0)
+                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
             
-            fitness += foodCount * 5;
+            fitness += foodCount * 10;
+            if(gotAwayFromFood > 0)
+                fitness *= UnityEngine.Mathf.Pow(.95f, gotAwayFromFood);
             
             // if(foodsLost > 0)
             //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
 
-            if(foodCount > 0)
-                fitness *= UnityEngine.Mathf.Pow(1.1f, foodCount);
-            if(foodCount >= 3)
-                fitness *= 2;
+            // if(foodCount > 0)
+            //     fitness *= UnityEngine.Mathf.Pow(1.1f, foodCount);
 
-            if(fitness <= 0) fitness = System.Single.Epsilon;
+            //Reward agents on reproducing, but not on being greedy
+            if (foodCount >= 2)
+            {
+                if (foodCount < 6)
+                    fitness *= 5f;
+                else
+                    fitness = UnityEngine.Mathf.Pow(0.9f, foodCount);
+            }
+
+            if(fitness < System.Single.Epsilon) fitness = System.Single.Epsilon;
             genome.fitness = fitness;
         }
         public bool CanAdvanceGen()
@@ -166,6 +179,11 @@ namespace IA.Agent
             prevPos = position;
             Vec2 newPos = position + dir;
             
+            //Punish moving in a straight line
+            if(dir == lastDir)
+                movedStraight++;
+            lastDir = dir;
+            
             //If out of horizontal bounds, loop
             if (newPos.x < minPos.x) newPos.x = maxPos.x;
             else if (newPos.x > maxPos.x) newPos.x = minPos.x;
@@ -182,16 +200,31 @@ namespace IA.Agent
         }
         protected Vec2 GetDir(float cardinals)
         {
-            if(cardinals > 0.1f)
-                return new Vec2(1, 0);
-            if(cardinals > 0.325f)
-                return new Vec2(-1, 0);
-            if(cardinals > 0.55f)
-                return new Vec2(0, up);
             if(cardinals > 0.775f)
                 return new Vec2(0, -up);
+            if(cardinals > 0.55f)
+                return new Vec2(0, up);
+            if(cardinals > 0.325f)
+                return new Vec2(-1, 0);
+            if(cardinals > 0.1f)
+                return new Vec2(1, 0);
             
             return new Vec2(0, 0);
+        }
+        protected float GetCardinal(Vec2 v)
+        {
+            //Get absolute value of vector
+            float ax = v.x > System.Single.Epsilon ? v.x : -v.x;
+            float ay = v.y > System.Single.Epsilon ? v.y : -v.y;
+
+            //Check biggest direction
+            if (ax >= ay)
+            {
+                if (ax < System.Single.Epsilon) return 0f;      
+                return v.x > 0f ? 0.2f : 0.4f; //if og x is positive 0.2f, else 0.4f
+            }
+
+            return v.y * up > 0f ? 0.6f : 0.8f; //if og y is positive 0.6f, else 0.8f
         }
         protected Vec2 GetDir(float[] cardinals)
         {
@@ -254,10 +287,13 @@ namespace IA.Agent
             canReproduce = false;
 
             lastDistToFood = int.MaxValue;
+            lastDir = new Vec2(0,0);
+            
             moved = 0;
             stayedStill = 0;
-            //gotAwayFromFood = 0;
+            gotAwayFromFood = 0;
             gotCloserToFood = 0;
+            movedStraight = 0;
             foodID = -1;
             foodsLost = 0;
             foodCount = 0;
@@ -266,33 +302,41 @@ namespace IA.Agent
         {
             inputs.Clear();
 
-            inputs.Add(position.y == maxPos.y ? 1 : 0);
-            inputs.Add(position.y == minPos.y ? 1 : 0);
+            // inputs.Add(position.y == maxPos.y ? 1 : 0);
+            // inputs.Add(position.y == minPos.y ? 1 : 0);
             
             Vec2 dist = nearFoodPos - position;
+            dist.y *= up;
             Vec2 dir = dist.IntNormalized();
             inputs.Add(dir.x);
             inputs.Add(dir.y);
+            inputs.Add(dir.x);
+            inputs.Add(dir.y);
+            //inputs.Add(GetCardinal(dir));
             
-            int distMag = dist.SqrMagnitude();
+            int distMag = dist.IntSqrMagnitude();
+            inputs.Add(distMag);
+            
+            inputs.Add(foodCount);
+            inputs.Add(foodCount);
 
             if (distMag < lastDistToFood)
-            {
-                lastDistToFood = distMag;
                 gotCloserToFood++;
-            }
-
-            //You only need to know if you've eaten enough when deciding if you should stay or you should go
-            if (stage >= Stage.Enemies)
-            {
-                inputs.Add(willSurvive ? 1 : 0);
-                inputs.Add(canReproduce ? 1 : 0);
-            }
             else
-            {
-                inputs.Add(0);
-                inputs.Add(0);
-            }
+                gotAwayFromFood++;
+            lastDistToFood = distMag;
+
+            // //You only need to know if you've eaten enough when deciding if you should stay or you should go
+            // if (stage >= Stage.Enemies)
+            // {
+            //     inputs.Add(willSurvive ? 1 : 0);
+            //     inputs.Add(canReproduce ? 1 : 0);
+            // }
+            // else
+            // {
+            //     inputs.Add(0);
+            //     inputs.Add(0);
+            // }
 
             float[] outputs = brain.Synapsis(inputs.ToArray());
             
@@ -302,8 +346,8 @@ namespace IA.Agent
             if(position == prevPos)
                 stayedStill++;
 
-            willFleeAgainstEnemy = outputs[4] > 0.5f;
-            willGiveFoodToAlly = outputs[5] > 0.5f;
+            // willFleeAgainstEnemy = outputs[4] > 0.5f;
+            // willGiveFoodToAlly = outputs[5] > 0.5f;
         }
         protected virtual void OnEat(float foodEaten = 1)
         {
