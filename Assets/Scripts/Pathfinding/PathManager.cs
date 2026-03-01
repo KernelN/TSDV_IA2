@@ -83,6 +83,7 @@ namespace IA.Pathfinding
         [SerializeField] Voronoi.VoronoiAStarPathfinder[] pathfinders;
         [SerializeField] bool useSavedData;
         [SerializeField] bool saveData;
+        string dataRoot;
         //[Header("Runtime Values")]
         LayerData[] layerData;
         [Header("DEBUG")]
@@ -90,12 +91,13 @@ namespace IA.Pathfinding
         
         void Awake()
         {
+            dataRoot = System.IO.Path.Combine(Application.persistentDataPath);
             if (useSavedData)
             {
                 layerData = new LayerData[grids.Length];
                 for (int i = 0; i < grids.Length; i++)
                 {
-                    string dataPath = Application.persistentDataPath + "_GridLayer_" + i + ".bin";
+                    string dataPath = System.IO.Path.Combine(dataRoot, "_GridLayer_" + i + ".bin");
                     layerData[i] = FileManager<LayerData>.LoadDataFromFile(dataPath);
                 }
             }
@@ -129,7 +131,7 @@ namespace IA.Pathfinding
 
             for (int i = 0; i < grids.Length; i++)
             {
-                string dataPath = Application.persistentDataPath + "_GridLayer_" + i + ".bin";
+                string dataPath = System.IO.Path.Combine(dataRoot, "_GridLayer_" + i + ".bin");;
 
                 LayerData newData = new LayerData();
                 newData.isSetted = true;

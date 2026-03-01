@@ -223,7 +223,10 @@ namespace IA.Pathfinding.Voronoi
                 for (int i = 0; i < pointsID.Count; i++)
                 {
                     if (!pointsID.Contains(currentPOIs[i].id))
+                    {
                         needsToBeUpdated = true;
+                        break;
+                    }
                 }
             }
             else 
@@ -307,20 +310,20 @@ namespace IA.Pathfinding.Voronoi
             if (currentPOIs.Count <= 0) return;
             
             //Calculate current region of each grid point
-            Parallel.For(0, grid.gridSize.x, x =>
-            { Parallel.For(0, grid.gridSize.y, y =>
-              { Vector2Int gridPos = new Vector2Int(x, y);
+            int gridHeight = grid.gridSize.y;
+            int totalNodes = grid.gridSize.x * gridHeight;
+            Parallel.For(0, totalNodes, index =>
+            {
+                int x = index / gridHeight;
+                int y = index % gridHeight;
+                Vector2Int gridPos = new Vector2Int(x, y);
                 int cheapestPoint = currentPOIs[0].id;
 
                 if (!regionsCostByNode.TryGetValue(gridPos, out Dictionary<int, float> costs))
-                    return; //this return exits the Parallel.For y, not the UpdateVoronoi method
+                    return;
 
                 int regionID = currentPOIs[0].id;
                 costs.TryGetValue(regionID, out float cost);
-
-                // costs.Remove(regionID);
-                // costs.Add(regionID, cost);
-
                 float smallestCost = cost;
 
                 for (int i = 1; i < currentPOIs.Count; i++)
@@ -333,17 +336,12 @@ namespace IA.Pathfinding.Voronoi
                         smallestCost = cost;
                         cheapestPoint = regionID;
                     }
-
-                    // costs.Remove(regionID);
-                    // costs.Add(regionID, cost);
                 }
 
                 lock (regionsByNode)
                 {
-                    regionsByNode.Remove(gridPos);
-                    regionsByNode.Add(gridPos, cheapestPoint);
-                } 
-              }); 
+                    regionsByNode[gridPos] = cheapestPoint;
+                }
             });
         }
         float GetCost(PathNode start, PathNode end)

@@ -66,6 +66,7 @@ namespace IA.FSM.States
             
             behaviours.Add(() =>
             { 
+                if(path == null) return;
               if (currentNode < path.Count - 1)
               {
                   Vector3 movement = path[currentNode + 1].worldPos - pos;
