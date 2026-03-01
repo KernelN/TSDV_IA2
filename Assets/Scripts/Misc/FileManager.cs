@@ -1,5 +1,6 @@
 ﻿using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
+using UnityEngine;
 
 namespace Universal.FileManaging
 {
@@ -10,6 +11,14 @@ namespace Universal.FileManaging
             BinaryFormatter bf = new BinaryFormatter();
             FileStream file = File.Create(dataPath);
             bf.Serialize(file, objectToSave);
+            file.Close();
+        }
+        public static void SaveDataToJson(T objectToSave, string dataPath)
+        {
+            BinaryFormatter bf = new BinaryFormatter();
+            FileStream file = File.Create(dataPath);
+            string json = JsonUtility.ToJson(objectToSave);
+            bf.Serialize(file, json);
             file.Close();
         }
         public static T LoadDataFromFile(string dataPath)

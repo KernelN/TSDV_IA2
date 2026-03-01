@@ -36,25 +36,49 @@ namespace IA.Game
         int agent1Count;
         int agent2Count;
         bool initiated;
+        bool linked;
 
 
         //Unity Events
         void Start()
         {
             popsManager = Population.PopulationsManager.Instance;
-
+            
+            if(linked) return;
+            
             popsManager.SimulationStarted += OnSimStart;
             popsManager.SimulationUpdated += OnSimUpdate;
             popsManager.GenerationChanged += OnNewGeneration;
+            linked = true;
+        }
+        void OnDisable()
+        {
+            if(!linked) return;
+            
+            popsManager.SimulationStarted -= OnSimStart;
+            popsManager.SimulationUpdated -= OnSimUpdate;
+            popsManager.GenerationChanged -= OnNewGeneration;
+            
+            linked = false;
         }
         void OnEnable()
         {
             if(data == null) return;
+            if(linked) return;
             
-            OnNewGeneration();
+            popsManager.SimulationStarted += OnSimStart;
+            popsManager.SimulationUpdated += OnSimUpdate;
+            popsManager.GenerationChanged += OnNewGeneration;
+            linked = true;
+            
+            //OnNewGeneration();
         }
 
         //Methods
+        public void SwapActive()
+        {
+            enabled = !enabled;
+        }
         SpriteController CreateSprite(GameObject prefab, Math.Vec2 pos)
         {
             Transform t = Instantiate(prefab).transform;

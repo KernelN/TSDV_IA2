@@ -136,9 +136,11 @@ namespace IA.Population
             
             string dataPath = Application.persistentDataPath + "_pop1Data_" + fileName + ".bin";
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
+            Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop1Data, dataPath);
             
             dataPath = Application.persistentDataPath + "_pop2Data_" + fileName + ".bin";
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop2Data, dataPath);
+            Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop2Data, dataPath);
         }
         public void LoadPopulations(string fileName)
         {
