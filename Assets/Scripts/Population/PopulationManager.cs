@@ -50,6 +50,7 @@ namespace IA.Population
         int initialPopCount;
 
         public int generation { get; private set; }
+        public int populationCount { get; private set; }
         public float bestFitness { get; private set; }
         public float avgFitness { get; private set; }
         public float worstFitness { get; private set; }
@@ -198,6 +199,8 @@ namespace IA.Population
             // Increment generation counter
             generation++;
 
+            populationCount = populationControllers.Count;
+            
             //Calculate the fitness of all agents
             for (int i = 0; i < populationControllers.Count; i++)
             {

@@ -9,11 +9,13 @@ namespace IA.Game
         class PopulationUI
         {
             public Text generationsCountTxt;
+            public Text populationTxt;
             public Text bestFitnessTxt;
             public Text avgFitnessTxt;
             public Text worstFitnessTxt;   
             
             string genCountText;
+            string populationText;
             string bestFitText;
             string avgFitText;
             string worstFitText;
@@ -27,6 +29,8 @@ namespace IA.Game
                 
                 if (string.IsNullOrEmpty(genCountText))
                     genCountText = generationsCountTxt.text;
+                if (string.IsNullOrEmpty(populationText))
+                    populationText = populationTxt.text;
                 if (string.IsNullOrEmpty(bestFitText))
                     bestFitText = bestFitnessTxt.text;
                 if (string.IsNullOrEmpty(avgFitText))
@@ -35,6 +39,7 @@ namespace IA.Game
                     worstFitText = worstFitnessTxt.text;
 
                 generationsCountTxt.text = string.Format(genCountText, 0);
+                populationTxt.text = string.Format(populationText, 0);
                 bestFitnessTxt.text = string.Format(bestFitText, 0);
                 avgFitnessTxt.text = string.Format(avgFitText, 0);
                 worstFitnessTxt.text = string.Format(worstFitText, 0);
@@ -45,6 +50,7 @@ namespace IA.Game
 
                 lastGeneration = popManager.generation;
                 generationsCountTxt.text = string.Format(genCountText, popManager.generation);
+                populationTxt.text = string.Format(populationText, popManager.populationCount);
                 bestFitnessTxt.text = string.Format(bestFitText, popManager.bestFitness);
                 avgFitnessTxt.text = string.Format(avgFitText, popManager.avgFitness);
                 worstFitnessTxt.text = string.Format(worstFitText, popManager.worstFitness);

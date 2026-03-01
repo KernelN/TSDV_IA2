@@ -114,12 +114,12 @@ namespace IA.Agent
             //     fitness *= UnityEngine.Mathf.Pow(.65f, stayedStill);
             
             fitness += 5 * gotCloserToFood;
-            if(movedStraight > 0)
-                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
-            
-            fitness += foodCount * 10;
             if(gotAwayFromFood > 0)
                 fitness *= UnityEngine.Mathf.Pow(.95f, gotAwayFromFood);
+            
+            fitness += foodCount * 30;
+            if(movedStraight > 0)
+                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
             
             // if(foodsLost > 0)
             //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
@@ -150,10 +150,8 @@ namespace IA.Agent
             generation++;
             OnReset();
         }
-        public void ForceEat(float mod = 1)
-        {
-            OnEat();
-        }
+        public void ForceEat(float mod = 1) => OnEat(mod);
+
         public void UnEat()
         {
             foodCount--;
@@ -326,17 +324,16 @@ namespace IA.Agent
                 gotAwayFromFood++;
             lastDistToFood = distMag;
 
-            // //You only need to know if you've eaten enough when deciding if you should stay or you should go
-            // if (stage >= Stage.Enemies)
-            // {
-            //     inputs.Add(willSurvive ? 1 : 0);
-            //     inputs.Add(canReproduce ? 1 : 0);
-            // }
-            // else
-            // {
-            //     inputs.Add(0);
-            //     inputs.Add(0);
-            // }
+            //You only need to know if you've eaten enough when deciding if you should stay or you should go
+            if (stage >= Stage.Enemies)
+            {
+                //inputs.Add(nearEnemy.position == position ? 1 : 0);
+                inputs.Add(0);
+            }
+            else
+            {
+                inputs.Add(0);
+            }
 
             float[] outputs = brain.Synapsis(inputs.ToArray());
             
