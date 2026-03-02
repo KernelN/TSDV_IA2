@@ -433,7 +433,8 @@ namespace IA.Population
                         }
                         else 
                         {
-                            list = new List<AgentBase> { a };
+                            list  = Helpers.ListManager<AgentBase>.GetList();
+                            list.Add(a);
                             map.foodTaken.TryAdd(map.food[foodIndex], list);
                         }
                     }
@@ -441,7 +442,8 @@ namespace IA.Population
                     //If CAN'T interact with enemies yet, eat food, and be happy
                     else
                     {
-                        map.foodTaken.TryAdd(map.food[foodIndex], new List<AgentBase> { a });
+                        map.foodTaken.TryAdd(map.food[foodIndex], 
+                                                Helpers.ListManager<AgentBase>.GetList(a));
                         map.food.RemoveAt(foodIndex);
                     }
                 }
