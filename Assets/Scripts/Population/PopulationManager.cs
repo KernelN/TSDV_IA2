@@ -433,7 +433,7 @@ namespace IA.Population
                         }
                         else 
                         {
-                            list  = Helpers.ListManager<AgentBase>.GetList();
+                            list = Helpers.ListManager<AgentBase>.GetList();
                             list.Add(a);
                             map.foodTaken.TryAdd(map.food[foodIndex], list);
                         }

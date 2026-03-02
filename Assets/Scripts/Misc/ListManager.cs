@@ -7,14 +7,27 @@ namespace IA.Helpers
         static List<List<T>> lists = new List<List<T>>();
         public static List<T> GetList()
         {
-            if(lists.Count > 0) return lists[0];
+            if (lists.Count > 0)
+            {
+                List<T> list = lists[0];
+                lists.RemoveAt(0);
+                return list;
+            }
         
             //Else
                 return new List<T>();
         }
         public static List<T> GetList(T value)
         {
-            List<T> list = lists.Count > 0 ? lists[0] : new List<T>();
+            List<T> list;
+                
+            if (lists.Count > 0)
+            {
+                list = lists[0];
+                lists.RemoveAt(0);
+            }
+            else 
+                list = new List<T>();
 
             list.Add(value);
             

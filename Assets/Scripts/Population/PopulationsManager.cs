@@ -177,7 +177,14 @@ namespace IA.Population
             if (pop1.populationCount > 0 && pop2.populationCount > 0)
             {
                 pop1.Update();
-                pop2.Update();
+                
+                //Add safe checks, just in case
+                if (pop1.populationCount > 0 && pop2.populationCount > 0)
+                    pop2.Update();
+                
+                //Add safe checks, just in case
+                if (pop1.populationCount == 0 || pop2.populationCount == 0)
+                    return;
 
                 //Manage food eating
                 bool bothPopsCanSeeEnemies = pop1.Stage >= Stage.Enemies && pop2.Stage >= Stage.Enemies;

@@ -1042,8 +1042,8 @@ MonoBehaviour:
     NeuronsCountPerHL: 25
     Bias: -3.17
     P: 0.25
-    EnemiesAvgFitness: 30
-    AlliesAvgFitness: 50
+    EnemiesAvgFitness: 50
+    AlliesAvgFitness: 80
   pop2:
     MutationChance: 0.1
     MutationRate: 0.3
@@ -1055,8 +1055,8 @@ MonoBehaviour:
     NeuronsCountPerHL: 25
     Bias: -3.17
     P: 0.25
-    EnemiesAvgFitness: 30
-    AlliesAvgFitness: 50
+    EnemiesAvgFitness: 50
+    AlliesAvgFitness: 80
 --- !u!4 &1500092832
 Transform:
   m_ObjectHideFlags: 0
