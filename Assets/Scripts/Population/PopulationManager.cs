@@ -481,6 +481,7 @@ namespace IA.Population
             brains.RemoveAt(index);
             population.RemoveAt(index);
             populationControllers.RemoveAt(index);
+            agent.Died -= OnAgentDied;
         }
 
         #region Helpers

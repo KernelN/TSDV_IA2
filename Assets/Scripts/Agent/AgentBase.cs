@@ -26,7 +26,7 @@ namespace IA.Agent
         
         //Fitness Values
         int moved;
-        int stayedStill;
+        int survivedEnemy;
         int gotCloserToFood;
         int gotAwayFromFood;
         int movedStraight;
@@ -110,16 +110,15 @@ namespace IA.Agent
         }
         public void CalcFitness()
         {
-            // if(stayedStill > 0)
-            //     fitness *= UnityEngine.Mathf.Pow(.65f, stayedStill);
+            fitness += 15 * gotCloserToFood;
+            if(movedStraight > 0)
+                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
             
-            fitness += 5 * gotCloserToFood;
+            fitness += foodCount * 200;
             if(gotAwayFromFood > 0)
                 fitness *= UnityEngine.Mathf.Pow(.95f, gotAwayFromFood);
             
-            fitness += foodCount * 30;
-            if(movedStraight > 0)
-                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
+            fitness += survivedEnemy * 2;
             
             // if(foodsLost > 0)
             //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
@@ -141,12 +140,18 @@ namespace IA.Agent
         }
         public bool CanAdvanceGen()
         {
-            if (generation >= 3) return false;
+            if (generation >= 3) return false; //THIS SHIT DOESN'T RESTART
 
             return willSurvive;
         }
         public void AdvanceGen()
         {
+            if (generation >= 3)
+            {
+                Die();
+                return;
+            }
+            
             generation++;
             OnReset();
         }
@@ -162,14 +167,8 @@ namespace IA.Agent
             if (foodCount == 0)
                 willSurvive = false;
         }
-        public void ReturnToLastPos()
-        {
-            position = prevPos;
-        }
-        public void Die()
-        {
-            Died?.Invoke(this);
-        }
+        public void ReturnToLastPos() => position = prevPos;
+        public void Die() => Died?.Invoke(this);
 
         //Protected Methods
         protected void Move(Vec2 dir)
@@ -288,7 +287,7 @@ namespace IA.Agent
             lastDir = new Vec2(0,0);
             
             moved = 0;
-            stayedStill = 0;
+            survivedEnemy = 0;
             gotAwayFromFood = 0;
             gotCloserToFood = 0;
             movedStraight = 0;
@@ -315,8 +314,9 @@ namespace IA.Agent
             int distMag = dist.IntSqrMagnitude();
             inputs.Add(distMag);
             
-            inputs.Add(foodCount);
-            inputs.Add(foodCount);
+            inputs.Add(willSurvive ? 1 : 0);
+            inputs.Add(canReproduce ? 1 : 0);
+            inputs.Add(canReproduce ? 1 : 0);
 
             if (distMag < lastDistToFood)
                 gotCloserToFood++;
@@ -327,8 +327,8 @@ namespace IA.Agent
             //You only need to know if you've eaten enough when deciding if you should stay or you should go
             if (stage >= Stage.Enemies)
             {
-                //inputs.Add(nearEnemy.position == position ? 1 : 0);
-                inputs.Add(0);
+                inputs.Add(nearEnemy.position == position ? 1 : 0);
+                //inputs.Add(0);
             }
             else
             {
@@ -339,11 +339,8 @@ namespace IA.Agent
             
             Vec2 moveDir = GetDir(outputs);
             Move(moveDir);
-            
-            if(position == prevPos)
-                stayedStill++;
 
-            // willFleeAgainstEnemy = outputs[4] > 0.5f;
+            willFleeAgainstEnemy = outputs[4] > 0.5f;
             // willGiveFoodToAlly = outputs[5] > 0.5f;
         }
         protected virtual void OnEat(float foodEaten = 1)
@@ -359,6 +356,10 @@ namespace IA.Agent
             foodID = -1;
                 
             FoodTaken?.Invoke();
+        }
+        public virtual void OnSurvivedEnemyEncounter()
+        {
+            survivedEnemy++;
         }
     }
 }

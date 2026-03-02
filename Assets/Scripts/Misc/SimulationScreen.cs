@@ -8,12 +8,14 @@ namespace IA.Game
         [System.Serializable]
         class PopulationUI
         {
+            public Text stageTxt;
             public Text generationsCountTxt;
             public Text populationTxt;
             public Text bestFitnessTxt;
             public Text avgFitnessTxt;
             public Text worstFitnessTxt;   
             
+            string stageText;
             string genCountText;
             string populationText;
             string bestFitText;
@@ -27,6 +29,8 @@ namespace IA.Game
             {
                 popManager = pop; 
                 
+                if (string.IsNullOrEmpty(stageText))
+                    stageText = stageTxt.text;
                 if (string.IsNullOrEmpty(genCountText))
                     genCountText = generationsCountTxt.text;
                 if (string.IsNullOrEmpty(populationText))
@@ -38,6 +42,7 @@ namespace IA.Game
                 if (string.IsNullOrEmpty(worstFitText))
                     worstFitText = worstFitnessTxt.text;
 
+                stageTxt.text = stageText + " " + nameof(Population.Stage.Tutorial);
                 generationsCountTxt.text = string.Format(genCountText, 0);
                 populationTxt.text = string.Format(populationText, 0);
                 bestFitnessTxt.text = string.Format(bestFitText, 0);
@@ -47,7 +52,8 @@ namespace IA.Game
             public void Update()
             {
                 if (lastGeneration == popManager.generation) return;
-
+                
+                stageTxt.text = stageText + " " + popManager.Stage;
                 lastGeneration = popManager.generation;
                 generationsCountTxt.text = string.Format(genCountText, popManager.generation);
                 populationTxt.text = string.Format(populationText, popManager.populationCount);
