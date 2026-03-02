@@ -42,9 +42,9 @@ namespace IA.FSM.States
               lock (pathFinder.grid.grid)
               {
                   if (parameters.Length > 7)
-                      path = pathManager.GetPathfinder(pathfinderIndex).FindPath(startPos, targetPos);
+                      path = pathFinder.FindPath(startPos, targetPos);
                   else
-                      path = pathManager.GetPathfinder(pathfinderIndex).FindPathToPOI(startPos);
+                      path = pathFinder.FindPathToPOI(startPos);
               }
             
               if (path == null)
