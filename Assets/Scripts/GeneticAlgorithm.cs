@@ -165,6 +165,13 @@ namespace IA.GeneAlgo
                 Crossover();
             }
 
+            if (newPopulation.Count > maxPopulation)
+            {
+                newPopulation.Sort(HandleComparison);
+                while (newPopulation.Count > maxPopulation) 
+                    newPopulation.RemoveAt(newPopulation.Count - 1);
+            }
+
             population = newPopulation;
             return newPopulation.ToArray();
         }

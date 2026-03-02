@@ -1024,9 +1024,9 @@ MonoBehaviour:
   divineInterventionsPerAutosave: 10
   successGensPerAutosave: 100
   autoSave: 1
-  savePrefix: NeuralTest
-  TurnsPerGeneration: 200
-  InitialPopulationCount: 30
+  savePrefix: 
+  TurnsPerGeneration: 150
+  InitialPopulationCount: 20
   pop1:
     MutationChance: 0.2
     MutationRate: 0.1
