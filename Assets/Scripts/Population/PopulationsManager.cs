@@ -294,7 +294,7 @@ namespace IA.Population
             }
 
             Turn++;
-            if (Turn >= TurnsPerGeneration || map.food.Count == 0)
+            if (Turn >= TurnsPerGeneration || map.food.Count == 0 || pop1.populationCount == 0 || pop2.populationCount == 0)
             {
                 Turn -= TurnsPerGeneration;
                 if (Turn < 0) Turn = 0;
