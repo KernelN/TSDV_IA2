@@ -12,39 +12,30 @@ namespace IA.FSM
         [Serializable]
         class Mine
         {
-            [Header("Set Values")]
-            public Transform t;
-            public int minerals = 30;
-            public int food = (15/3)*2;
             [Header("Runtime Values")]
+            public Transform t;
+            public Vector2Int gridPos;
             public int id;
+            public int minerals;
+            public int food;
             public bool isActive = true;
-
-            public Mine()
-            {
-                t = null;
-                id = 0;
-                
-                minerals = 30;
-                food = (15/3)*2;
-                isActive = true;
-            }
         }
-        
+
         [Header("General Settings")]
         [SerializeField] Pathfinding.PathManager pathManager;
         [SerializeField] Transform urbanCenter;
         [SerializeField] float mineInUseCheckInterval;
-        [SerializeField] Mine[] mines;
         [Header("Miner Settings")]
         [SerializeField] Miner.AMiner minerTemplate;
         [SerializeField] GameObject minerPrefab;
         [Header("Caravan Settings")]
         [SerializeField] Caravan.ACaravan caravanTemplate;
         [SerializeField] GameObject caravanPrefab;
+
         //[Header("Runtime Values")]
         List<Miner.AMiner> miners;
         List<Caravan.ACaravan> caravans;
+        List<Mine> mines;
         float mineCheckTimer;
         Dictionary<int, Mine> minesByID;
         bool isOnEmergency;
@@ -54,39 +45,56 @@ namespace IA.FSM
         {
             miners = new List<Miner.AMiner>();
             caravans = new List<Caravan.ACaravan>();
-            
+            mines = new List<Mine>();
+
             minesByID = new Dictionary<int, Mine>();
-            for (int i = 0; i < mines.Length; i++)
+            Pathfinding.MineSettings mineSettings = pathManager.GetMineSettings();
+            List<Pathfinding.PathManager.Mine> generatedMines = pathManager.GetRuntimeMines();
+            for (int i = 0; i < generatedMines.Count; i++)
             {
-                mines[i].id = pathManager.GetPathfinder(0).
-                                GetPointOfInterestID(mines[i].t.position);
-                minesByID.TryAdd(mines[i].id, mines[i]);
+                Mine mine = new Mine
+                {
+                    t = generatedMines[i].transform,
+                    gridPos = generatedMines[i].gridPos,
+                    id = generatedMines[i].id,
+                    minerals = mineSettings.minerals,
+                    food = mineSettings.initialFood,
+                    isActive = true
+                };
+
+                mines.Add(mine);
+                minesByID.TryAdd(mine.id, mine);
             }
-            
+
             SpawnMiner();
             SpawnCaravan();
-            
+
             mineCheckTimer = mineInUseCheckInterval - 1;
         }
+
         void Update()
         {
             float dt = Time.deltaTime;
-            
+
             Parallel.ForEach(miners, miner =>
-            { lock(miner) miner.UpdateFSM(dt); });
+            {
+                lock (miner) miner.UpdateFSM(dt);
+            });
             Parallel.ForEach(caravans, caravan =>
-            { lock(caravan) caravan.UpdateFSM(dt); });
-            
+            {
+                lock (caravan) caravan.UpdateFSM(dt);
+            });
+
             for (int i = 0; i < miners.Count; i++)
                 miners[i].UpdateTransform();
             for (int i = 0; i < caravans.Count; i++)
                 caravans[i].UpdateTransform();
-            
+
             //Update Mines
-            for (int i = 0; i < mines.Length; i++)
-                if(mines[i].isActive != mines[i].t.gameObject.activeSelf)
+            for (int i = 0; i < mines.Count; i++)
+                if (mines[i].isActive != mines[i].t.gameObject.activeSelf)
                     mines[i].t.gameObject.SetActive(mines[i].isActive);
-            
+
             mineCheckTimer += dt;
             if (mineCheckTimer >= mineInUseCheckInterval)
             {
@@ -94,24 +102,25 @@ namespace IA.FSM
                 CheckMinesInUse();
             }
         }
-        
+
         //Methods
         public void SetEmergency()
         {
             isOnEmergency = !isOnEmergency;
-            
+
             Parallel.ForEach(miners, miner =>
             {
-                if(isOnEmergency) lock(miner) miner.Emergency();
-                else lock(miner) miner.EmergencyOver();
+                if (isOnEmergency) lock (miner) miner.Emergency();
+                else lock (miner) miner.EmergencyOver();
             });
-            
+
             Parallel.ForEach(caravans, caravan =>
             {
-                if(isOnEmergency) lock(caravan) caravan.Emergency();
-                else lock(caravan) caravan.EmergencyOver();
+                if (isOnEmergency) lock (caravan) caravan.Emergency();
+                else lock (caravan) caravan.EmergencyOver();
             });
         }
+
         public void SpawnMiner()
         {
             Miner.AMiner miner = new Miner.AMiner();
@@ -120,16 +129,17 @@ namespace IA.FSM
             miner.mineInterval = minerTemplate.mineInterval;
             miner.eatDuration = minerTemplate.eatDuration;
             miner.depositDuration = minerTemplate.depositDuration;
-            
+
             Transform minerBody = Instantiate(minerPrefab).transform;
             minerBody.parent = transform;
             minerBody.position = urbanCenter.position;
             Func<Vector2Int, bool> tryMine = TryMine;
             Func<Vector2Int, bool> tryEat = TryEat;
             miner.Set(pathManager, 0, urbanCenter, urbanCenter, minerBody, tryMine, tryEat);
-            
+
             miners.Add(miner);
         }
+
         public void SpawnCaravan()
         {
             Caravan.ACaravan caravan = new Caravan.ACaravan();
@@ -138,123 +148,118 @@ namespace IA.FSM
             caravan.loadDuration = caravanTemplate.loadDuration;
             caravan.depositDuration = caravanTemplate.depositDuration;
             caravan.onDepositSuccess += OnFoodDeposited;
-            
+
             Transform caravanBody = Instantiate(caravanPrefab).transform;
             caravanBody.parent = transform;
             caravanBody.position = urbanCenter.position;
             caravan.Set(pathManager, 1, urbanCenter, urbanCenter, caravanBody);
-            
+
             caravans.Add(caravan);
         }
+
         bool TryMine(Vector2Int minePos)
         {
-            Mine mine;
-            
             int mineID = pathManager.GetPathfinder(0).GetPointOfInterestID(minePos);
             if (mineID < 0) return false;
-            
-            if (minesByID.TryGetValue(mineID, out mine))
+
+            if (minesByID.TryGetValue(mineID, out Mine mine))
             {
                 lock (mine)
                     mine.minerals--;
-                
+
                 if (mine.minerals <= 0)
                 {
                     lock (minesByID)
                         minesByID.Remove(mineID);
-                    
+
                     lock (mine)
                         mine.isActive = false;
 
                     lock (pathManager)
                         pathManager.RemovePointOfInterest(mineID, 0);
-                    
+
                     for (int i = 0; i < miners.Count; i++)
                         lock (miners[i])
                             miners[i].OnMineEmpty(minePos);
-                    
-                    if(minesByID.Count <= 0)
+
+                    if (minesByID.Count <= 0)
                     {
                         for (int i = 0; i < miners.Count; i++)
                             lock (miners[i])
-                             miners[i].OnNoMoreMines();
+                                miners[i].OnNoMoreMines();
                         for (int i = 0; i < caravans.Count; i++)
                             lock (caravans[i])
                                 caravans[i].OnNoMoreMines();
                     }
                 }
-                
+
                 return mine.minerals >= 0;
             }
-            
+
             return false;
         }
+
         bool TryEat(Vector2Int foodStoragePos)
         {
-            Mine mine;
-            
             int mineID = pathManager.GetPathfinder(0).GetPointOfInterestID(foodStoragePos);
             if (mineID < 0) return false;
-            
+
             //If founds mine and has food, eat 1 and return true
-            if (minesByID.TryGetValue(mineID, out mine))
+            if (minesByID.TryGetValue(mineID, out Mine mine))
                 if (mine.food > 0)
                 {
                     lock (mine)
                         mine.food--;
-                    
+
                     return true;
                 }
 
             //If either not found or has no food, return false
             return false;
         }
+
         void CheckMinesInUse()
         {
-            ConcurrentBag<Vector2Int> mines = new ConcurrentBag<Vector2Int>();
-            
+            ConcurrentBag<Vector2Int> minesInUse = new ConcurrentBag<Vector2Int>();
+
             Parallel.ForEach(miners, miner =>
             {
-              if (!miner.hasMine) return;
-            
-              Vector2Int minePos = miner.minePos;
-            
-              if (mines.Contains(minePos)) return;
+                if (!miner.hasMine) return;
 
-              lock (mines)
-                  mines.Add(minePos);
+                Vector2Int minePos = miner.minePos;
+
+                if (minesInUse.Contains(minePos)) return;
+
+                lock (minesInUse)
+                    minesInUse.Add(minePos);
             });
-            
+
             ConcurrentBag<int> regions = new ConcurrentBag<int>();
-            Parallel.ForEach(mines, minePos =>
+            Parallel.ForEach(minesInUse, minePos =>
             {
                 int region;
-            
+
                 region = pathManager.GetPathfinder(0).GetPointOfInterestID(minePos);
-            
-                if(region < 0) return;
-            
+
+                if (region < 0) return;
+
                 lock (regions)
                     regions.Add(region);
             });
-            
+
             pathManager.GetPathfinder(1).UpdatePointsOfInterest(regions.ToList());
 
             for (int i = 0; i < caravans.Count; i++)
                 caravans[i].OnMapUpdated();
-            // Parallel.ForEach(caravans, caravan =>
-            // { caravan.OnMapUpdated(); });
         }
-        
+
         //Event Receivers
         void OnFoodDeposited(Vector2Int gridPos)
         {
-            Mine mine;
-            
             int mineID = pathManager.GetPathfinder(1).GetPointOfInterestID(gridPos);
             if (mineID < 0) return;
-            
-            if (!minesByID.TryGetValue(mineID, out mine)) return;
+
+            if (!minesByID.TryGetValue(mineID, out Mine mine)) return;
 
             lock (mine)
                 mine.food += 10; //hardcoded food amount

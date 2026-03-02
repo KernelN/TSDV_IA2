@@ -10,9 +10,7 @@ namespace IA.Pathfinding.Voronoi
     [System.Serializable]
     public class PointOfInterest
     {
-        [Header("Set Values")]
         public Transform t;
-        [Header("Runtime Values")]
         public Vector2Int gridPos;
         public int id;
     }
@@ -20,10 +18,8 @@ namespace IA.Pathfinding.Voronoi
     [System.Serializable]
     public class VoronoiAStarPathfinder : AStar.AStarPathfinder
     {
-        [Header("Set Values")]
-        public List<PointOfInterest> pointsOfInterest;
-        [SerializeField] bool addAllPOIAtStart = true;
         //[Header("Runtime Values")]
+        List<PointOfInterest> pointsOfInterest;
         List<PointOfInterest> currentPOIs;
         Dictionary<int, PointOfInterest> pointsById;
         Dictionary<Vector2Int, PointOfInterest> pointsByPos;
@@ -55,14 +51,15 @@ namespace IA.Pathfinding.Voronoi
                     continue;
                 }
                 
-                pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
+                if (pointsOfInterest[i].id == 0)
+                    pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
+
                 pointsOfInterest[i].gridPos = grid.GetGridPosition(pointsOfInterest[i].t.position);
                 pointsById.Add(pointsOfInterest[i].id, pointsOfInterest[i]);
                 pointsByPos.Add(pointsOfInterest[i].gridPos, pointsOfInterest[i]);
             }
             
-            if(addAllPOIAtStart)
-                currentPOIs.AddRange(pointsOfInterest);
+            currentPOIs.AddRange(pointsOfInterest);
             
             CalculateVoronoi();
         }
@@ -90,14 +87,15 @@ namespace IA.Pathfinding.Voronoi
                     continue;
                 }
                 
-                pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
+                if (pointsOfInterest[i].id == 0)
+                    pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
+
                 pointsOfInterest[i].gridPos = grid.GetGridPosition(pointsOfInterest[i].t.position);
                 pointsById.Add(pointsOfInterest[i].id, pointsOfInterest[i]);
                 pointsByPos.Add(pointsOfInterest[i].gridPos, pointsOfInterest[i]);
             }
             
-            if(addAllPOIAtStart)
-                currentPOIs.AddRange(pointsOfInterest);
+            currentPOIs.AddRange(pointsOfInterest);
             
             if(regionsCostByNode == null)
                 CalculateVoronoi();
@@ -109,6 +107,11 @@ namespace IA.Pathfinding.Voronoi
 #if UNITY_EDITOR
                 SetGizmoColors();
 #endif
+        }
+
+        public void SetPointsOfInterest(List<PointOfInterest> points)
+        {
+            pointsOfInterest = points ?? new List<PointOfInterest>();
         }
         public void DrawGizmos()
         {
