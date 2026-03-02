@@ -207,54 +207,47 @@ namespace IA.Population
                 //If they're not the same team, fight
                 if (agents[0].isTeam1 != agents[1].isTeam1)
                 {
-                    //If agent A flees...
-                    if (agents[0].willFleeAgainstEnemy)
+                    //If neither flee, fight, only 1 survives
+                    if (!agents[0].willFleeAgainstEnemy && !agents[1].willFleeAgainstEnemy)
                     {
-                        //...and agent B flees too, nobody eats, nobody dies
-                        if (agents[1].willFleeAgainstEnemy)
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ReturnToLastPos();
-                        }
+                        float survChance = Random.Range(0, 1f);
 
-                        //...and agent B doesn't flee, agent B eats
+                        if (survChance < 0.5f)
+                        {
+                            agents[0].Die();
+                            agents[1].ForceEat();
+                            agents[1].OnSurvivedEnemyEncounter();
+                        }
                         else
                         {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ForceEat();
-                            ConsumeFoodTaken();
+                            agents[1].Die();
+                            agents[0].ForceEat();
+                            agents[0].OnSurvivedEnemyEncounter();
                         }
+                        ConsumeFoodTaken();
                     }
-
-                    //If agent A doesn't flee...
                     else
                     {
-                        //...and agent B flees, agent A eats
-                        if (agents[1].willFleeAgainstEnemy)
+                        //One flees, the one who doesn't, eats
+                        if(agents[0].willFleeAgainstEnemy)
+                            agents[0].ReturnToLastPos();
+                        else
                         {
-                            agents[1].ReturnToLastPos();
                             agents[0].ForceEat();
                             ConsumeFoodTaken();
                         }
 
-                        //...and agent B doesn't flee, somebody dies, somebody eats
+
+                        if (agents[1].willFleeAgainstEnemy)
+                            agents[1].ReturnToLastPos();
                         else
                         {
-                            float survChance = Random.Range(0, 1f);
-
-                            if (survChance < 0.5f)
-                            {
-                                agents[0].Die();
-                                agents[1].ForceEat();
-                                ConsumeFoodTaken();
-                            }
-                            else
-                            {
-                                agents[1].Die();
-                                agents[0].ForceEat();
-                                ConsumeFoodTaken();
-                            }
+                            agents[1].ForceEat();
+                            ConsumeFoodTaken();
                         }
+                        
+                        agents[0].OnSurvivedEnemyEncounter();
+                        agents[1].OnSurvivedEnemyEncounter();
                     }
                 }
 
@@ -267,32 +260,33 @@ namespace IA.Population
                 }
                 else
                 {
-                    if (agents[0].willGiveFoodToAlly)
+                    if (!agents[0].willGiveFoodToAlly && !agents[1].willGiveFoodToAlly)
                     {
-                        if (agents[1].willGiveFoodToAlly)
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ReturnToLastPos();
-                        }
-                        else
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ForceEat();
-                            ConsumeFoodTaken();
-                        }
+                        agents[0].ForceEat(.5f);
+                        agents[1].ForceEat(.5f);
+                        ConsumeFoodTaken();
                     }
                     else
                     {
-                        if (agents[1].willGiveFoodToAlly)
+                        if (agents[0].willGiveFoodToAlly)
                         {
-                            agents[1].ReturnToLastPos();
-                            agents[0].ForceEat();
-                            ConsumeFoodTaken();
+                            agents[0].ReturnToLastPos();
+                            agents[1].OnGaveFoodToALly();
                         }
                         else
                         {
-                            agents[0].ForceEat(.5f);
-                            agents[1].ForceEat(.5f);
+                            agents[0].ForceEat();
+                            ConsumeFoodTaken();
+                        }
+
+                        if (agents[1].willGiveFoodToAlly)
+                        {
+                            agents[1].ReturnToLastPos();
+                            agents[1].OnGaveFoodToALly();
+                        }
+                        else
+                        {
+                            agents[1].ForceEat();
                             ConsumeFoodTaken();
                         }
                     }
@@ -380,9 +374,6 @@ namespace IA.Population
                 //break;
             }
         }
-
-       
-
         void ResolveNonFoodEnemyCollisions()
         {
             List<(AgentBase team1, AgentBase team2)> conflicts = new List<(AgentBase, AgentBase)>();
@@ -418,7 +409,6 @@ namespace IA.Population
                 ResolveNonFoodEnemyConflict(team1Agent, team2Agent);
             }
         }
-
         void ResolveNonFoodEnemyConflict(AgentBase agentA, AgentBase agentB)
         {
             bool agentAFlees = agentA.willFleeAgainstEnemy;
@@ -428,6 +418,8 @@ namespace IA.Population
             {
                 agentA.ReturnToLastPos();
                 agentB.ReturnToLastPos();
+                agentA.OnSurvivedEnemyEncounter();
+                agentB.OnSurvivedEnemyEncounter();
                 return;
             }
 
@@ -435,22 +427,37 @@ namespace IA.Population
             {
                 float deathChance = Random.Range(0f, 1f);
                 if (deathChance < 0.5f)
+                {
                     agentA.Die();
+                    agentB.OnSurvivedEnemyEncounter();
+                }
                 else
+                {
                     agentB.Die();
+                    agentA.OnSurvivedEnemyEncounter();
+                }
 
                 return;
             }
 
-            AgentBase fleeingAgent = agentAFlees ? agentA : agentB;
+            AgentBase fleeingAgent;
+            if (agentAFlees)
+            {
+                fleeingAgent = agentA;
+                agentA.OnSurvivedEnemyEncounter();
+            }
+            else
+            {
+                fleeingAgent = agentB;
+                agentA.OnSurvivedEnemyEncounter();
+            }
             fleeingAgent.ReturnToLastPos();
 
             float fleeSurvival = Random.Range(0f, 1f);
             if (fleeSurvival < 0.75f)
                 fleeingAgent.Die();
         }
-
-        bool IsFoodOnPosition(IA.Math.Vec2 position)
+        bool IsFoodOnPosition(Vec2 position)
         {
             for (int i = 0; i < map.food.Count; i++)
             {
@@ -470,7 +477,7 @@ namespace IA.Population
 
             if (map.food == null)
             {
-                map.food = new List<Math.Vec2>();
+                map.food = new List<Vec2>();
                 map.foodTaken = new Dictionary<Vec2, List<AgentBase>>();
             }
             else
@@ -486,10 +493,10 @@ namespace IA.Population
 
             for (int i = 0; i < InitialPopulationCount * 2; i++)
             {
-                Math.Vec2 pos;
+                Vec2 pos;
                 do
                 {
-                    pos = new Math.Vec2(Random.Range(minX, maxX), Random.Range(minY, maxY));
+                    pos = new Vec2(Random.Range(minX, maxX), Random.Range(minY, maxY));
                 } while (PosHasFood(pos));
                 map.food.Add(pos);
             }
@@ -499,7 +506,7 @@ namespace IA.Population
             map.food.Remove(map.foodTaken.Keys.First());
             map.foodTaken.Remove(map.foodTaken.Keys.First());
         }
-        bool PosHasFood(Math.Vec2 pos)
+        bool PosHasFood(Vec2 pos)
         {
             for (int i = 0; i < map.food.Count; i++)
             {

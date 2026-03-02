@@ -27,10 +27,10 @@ namespace IA.Agent
         //Fitness Values
         int moved;
         int survivedEnemy;
+        int helpedAlly;
         int gotCloserToFood;
         int gotAwayFromFood;
         int movedStraight;
-        int foodsLost;
         float foodCount;
 
         public bool willSurvive { get; protected set; }
@@ -74,7 +74,7 @@ namespace IA.Agent
             }
 
             foodID = index;
-            foodsLost++;
+            helpedAlly++;
         }
         public void SetNearAlly(AgentBase nearAlly)
         {
@@ -119,6 +119,7 @@ namespace IA.Agent
                 fitness *= UnityEngine.Mathf.Pow(.95f, gotAwayFromFood);
             
             fitness += survivedEnemy * 2;
+            fitness += helpedAlly * 10;
             
             // if(foodsLost > 0)
             //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
@@ -176,8 +177,8 @@ namespace IA.Agent
             prevPos = position;
             Vec2 newPos = position + dir;
             
-            //Punish moving in a straight line
-            if(dir == lastDir)
+            //Punish MOVING in a straight line
+            if(dir.IntSqrMagnitude() > 0 && dir == lastDir)
                 movedStraight++;
             lastDir = dir;
             
@@ -292,7 +293,7 @@ namespace IA.Agent
             gotCloserToFood = 0;
             movedStraight = 0;
             foodID = -1;
-            foodsLost = 0;
+            helpedAlly = 0;
             foodCount = 0;
         }
         protected virtual void OnThink()
@@ -324,10 +325,18 @@ namespace IA.Agent
                 gotAwayFromFood++;
             lastDistToFood = distMag;
 
-            //You only need to know if you've eaten enough when deciding if you should stay or you should go
             if (stage >= Stage.Enemies)
             {
-                inputs.Add(nearEnemy.position == position ? 1 : 0);
+                inputs.Add((nearEnemy.position - position).IntSqrMagnitude() < 5 ? 1 : 0);
+                //inputs.Add(0);
+            }
+            else
+            {
+                inputs.Add(0);
+            }
+            if (stage >= Stage.Allies)
+            {
+                inputs.Add((nearAlly.position - position).IntSqrMagnitude() < 5 ? 1 : 0);
                 //inputs.Add(0);
             }
             else
@@ -341,7 +350,7 @@ namespace IA.Agent
             Move(moveDir);
 
             willFleeAgainstEnemy = outputs[4] > 0.5f;
-            // willGiveFoodToAlly = outputs[5] > 0.5f;
+            willGiveFoodToAlly = outputs[5] > 0.5f;
         }
         protected virtual void OnEat(float foodEaten = 1)
         {
@@ -360,6 +369,12 @@ namespace IA.Agent
         public virtual void OnSurvivedEnemyEncounter()
         {
             survivedEnemy++;
+        }
+        public virtual void OnGaveFoodToALly()
+        {
+            //Only reward it if it can reproduce
+            if(canReproduce)
+                helpedAlly++;
         }
     }
 }

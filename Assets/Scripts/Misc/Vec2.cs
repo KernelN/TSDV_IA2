@@ -65,6 +65,7 @@ namespace IA.Math
 
         #region Static Methods
         public static float Distance(Vec2 a, Vec2 b) { return (a - b).Magnitude(); }
+        public static float SqrDistance(Vec2 a, Vec2 b) { return (a - b).SqrMagnitude(); }
         #endregion
     }
 }

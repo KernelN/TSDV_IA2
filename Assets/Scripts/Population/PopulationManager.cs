@@ -453,7 +453,6 @@ namespace IA.Population
                 a.FoodTaken -= OnFoodTaken;
             }
         }
-
         void SetAgent(int index, bool setBrain = true)
         {
             if(setBrain)
@@ -471,7 +470,6 @@ namespace IA.Population
 
             a.Died += OnAgentDied;
         }
-        
         void OnAgentDied(AgentBase agent)
         {
             int index = populationControllers.IndexOf(agent);
@@ -521,11 +519,11 @@ namespace IA.Population
             else
             {
                 AgentBase nearest = map.population2[0];
-                float distance = Vec2.Distance(pos, nearest.position);
+                float distance = Vec2.SqrDistance(pos, nearest.position);
                 
                 for (int i = 1; i < map.population2.Count; i++)
                 {
-                    float newDist = Vec2.Distance(pos, map.population2[i].position);
+                    float newDist = Vec2.SqrDistance(pos, map.population2[i].position);
                     if (newDist < distance)
                     {
                         distance = newDist;
@@ -541,11 +539,11 @@ namespace IA.Population
             if (isTeam1)
             {
                 AgentBase nearest = map.population2[0];
-                float distance = Vec2.Distance(pos, nearest.position);
+                float distance = Vec2.SqrDistance(pos, nearest.position);
                 
                 for (int i = 1; i < map.population2.Count; i++)
                 {
-                    float newDist = Vec2.Distance(pos, map.population2[i].position);
+                    float newDist = Vec2.SqrDistance(pos, map.population2[i].position);
                     if (newDist < distance)
                     {
                         distance = newDist;
@@ -578,11 +576,11 @@ namespace IA.Population
             int nearest = 0;
             Vec2 foodPos = map.food[0];
 
-            float distance = Vec2.Distance(pos, foodPos);
+            float distance = Vec2.SqrDistance(pos, foodPos);
             
             for (int i = 1; i < map.food.Count; i++)
             {
-                float newDist = Vec2.Distance(pos, map.food[i]);
+                float newDist = Vec2.SqrDistance(pos, map.food[i]);
                 if (newDist < distance)
                 {
                     distance = newDist;
