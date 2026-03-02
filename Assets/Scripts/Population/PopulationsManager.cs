@@ -147,13 +147,13 @@ namespace IA.Population
             
             string dataPath = System.IO.Path.Combine(root, fileName +"_pop1Data" + ".bin");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop1Data, dataPath);
-            dataPath = System.IO.Path.Combine(root, fileName + "_pop1Json" + ".json");
-            Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop1Data, dataPath);
+            // dataPath = System.IO.Path.Combine(root, fileName + "_pop1Json" + ".json");
+            // Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop1Data, dataPath);
             
             dataPath = System.IO.Path.Combine(root, fileName + "_pop2Data" + ".bin");
             Universal.FileManaging.FileManager<PopulationData>.SaveDataToFile(pop2Data, dataPath);
-            dataPath = System.IO.Path.Combine(root, fileName + "_pop2Json" + ".json");
-            Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop2Data, dataPath);
+            // dataPath = System.IO.Path.Combine(root, fileName + "_pop2Json" + ".json");
+            // Universal.FileManaging.FileManager<PopulationData>.SaveDataToJson(pop2Data, dataPath);
         }
         public void LoadPopulations(string fileName)
         {
@@ -192,7 +192,7 @@ namespace IA.Population
                 if (agents.Count == 1)
                 {
                     agents[0].ForceEat();
-                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    ConsumeFoodTaken();
                     continue;
                 }
 
@@ -200,7 +200,7 @@ namespace IA.Population
                 if (!bothPopsCanSeeEnemies)
                 {
                     agents[0].ForceEat();
-                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    ConsumeFoodTaken();
                     break;
                 }
 
@@ -222,6 +222,7 @@ namespace IA.Population
                         {
                             agents[0].ReturnToLastPos();
                             agents[1].ForceEat();
+                            ConsumeFoodTaken();
                         }
                     }
 
@@ -233,6 +234,7 @@ namespace IA.Population
                         {
                             agents[1].ReturnToLastPos();
                             agents[0].ForceEat();
+                            ConsumeFoodTaken();
                         }
 
                         //...and agent B doesn't flee, somebody dies, somebody eats
@@ -244,11 +246,13 @@ namespace IA.Population
                             {
                                 agents[0].Die();
                                 agents[1].ForceEat();
+                                ConsumeFoodTaken();
                             }
                             else
                             {
                                 agents[1].Die();
                                 agents[0].ForceEat();
+                                ConsumeFoodTaken();
                             }
                         }
                     }
@@ -258,7 +262,7 @@ namespace IA.Population
                 else if (!bothPopsCanSeeAllies)
                 {
                     agents[0].ForceEat();
-                    map.foodTaken.Remove(map.foodTaken.Keys.First());
+                    ConsumeFoodTaken();
                     break;
                 }
                 else
@@ -274,6 +278,7 @@ namespace IA.Population
                         {
                             agents[0].ReturnToLastPos();
                             agents[1].ForceEat();
+                            ConsumeFoodTaken();
                         }
                     }
                     else
@@ -282,11 +287,13 @@ namespace IA.Population
                         {
                             agents[1].ReturnToLastPos();
                             agents[0].ForceEat();
+                            ConsumeFoodTaken();
                         }
                         else
                         {
                             agents[0].ForceEat(.5f);
                             agents[1].ForceEat(.5f);
+                            ConsumeFoodTaken();
                         }
                     }
                 }
@@ -373,6 +380,8 @@ namespace IA.Population
                 //break;
             }
         }
+
+       
 
         void ResolveNonFoodEnemyCollisions()
         {
@@ -462,7 +471,7 @@ namespace IA.Population
             if (map.food == null)
             {
                 map.food = new List<Math.Vec2>();
-                map.foodTaken = new Dictionary<int, List<AgentBase>>();
+                map.foodTaken = new Dictionary<Vec2, List<AgentBase>>();
             }
             else
             {
@@ -484,6 +493,11 @@ namespace IA.Population
                 } while (PosHasFood(pos));
                 map.food.Add(pos);
             }
+        }
+        void ConsumeFoodTaken()
+        {
+            map.food.Remove(map.foodTaken.Keys.First());
+            map.foodTaken.Remove(map.foodTaken.Keys.First());
         }
         bool PosHasFood(Math.Vec2 pos)
         {

@@ -421,7 +421,7 @@ namespace IA.Population
                         a.UnEat();
                         List<AgentBase> list;
 
-                        if (map.foodTaken.TryGetValue(foodIndex, out list))
+                        if (map.foodTaken.TryGetValue(map.food[foodIndex], out list))
                         {
                             //If there's already 2 or more agents in the list, cell is overcrowded, return
                             if(list.Count > 1)
@@ -434,14 +434,14 @@ namespace IA.Population
                         else 
                         {
                             list = new List<AgentBase> { a };
-                            map.foodTaken.TryAdd(foodIndex, list);
+                            map.foodTaken.TryAdd(map.food[foodIndex], list);
                         }
                     }
 
                     //If CAN'T interact with enemies yet, eat food, and be happy
                     else
                     {
-                        map.foodTaken.TryAdd(foodIndex, new List<AgentBase> { a });
+                        map.foodTaken.TryAdd(map.food[foodIndex], new List<AgentBase> { a });
                         map.food.RemoveAt(foodIndex);
                     }
                 }
