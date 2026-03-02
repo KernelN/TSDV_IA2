@@ -174,139 +174,143 @@ namespace IA.Population
         }
         void UpdateSimulation()
         {
-            pop1.Update();
-            pop2.Update();
-
-            //Manage food eating
-            bool bothPopsCanSeeEnemies = pop1.Stage >= Stage.Enemies && pop2.Stage >= Stage.Enemies;
-            bool bothPopsCanSeeAllies = pop1.Stage >= Stage.Allies && pop2.Stage >= Stage.Allies;
-
-            if (bothPopsCanSeeEnemies)
-                ResolveNonFoodEnemyCollisions();
-
-            while (map.foodTaken.Count > 0)
+            if (pop1.populationCount > 0 && pop2.populationCount > 0)
             {
-                List<AgentBase> agents = map.foodTaken.Values.First();
-                
-                if (agents.Count == 0)
-                {
-                    ClearFoodTaken(false);
-                    continue;
-                }
-                
-                //If there's only one agent, let it eat and be happy
-                if (agents.Count == 1)
-                {
-                    agents[0].ForceEat();
-                    ClearFoodTaken();
-                    continue;
-                }
+                pop1.Update();
+                pop2.Update();
 
-                //If can't interact with enemies yet, only the first one will eat
-                if (!bothPopsCanSeeEnemies)
-                {
-                    agents[0].ForceEat();
-                    ClearFoodTaken();
-                    break;
-                }
+                //Manage food eating
+                bool bothPopsCanSeeEnemies = pop1.Stage >= Stage.Enemies && pop2.Stage >= Stage.Enemies;
+                bool bothPopsCanSeeAllies = pop1.Stage >= Stage.Allies && pop2.Stage >= Stage.Allies;
 
-                //If they're not the same team, fight
-                if (agents[0].isTeam1 != agents[1].isTeam1)
+                if (bothPopsCanSeeEnemies)
+                    ResolveNonFoodEnemyCollisions();
+
+                while (map.foodTaken.Count > 0)
                 {
-                    //If agent A flees...
-                    if (agents[0].willFleeAgainstEnemy)
+                    List<AgentBase> agents = map.foodTaken.Values.First();
+
+                    if (agents.Count == 0)
                     {
-                        //...and agent B flees too, nobody eats, nobody dies
-                        if (agents[1].willFleeAgainstEnemy)
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ReturnToLastPos();
-                            ClearFoodTaken(false);
-                        }
-
-                        //...and agent B doesn't flee, agent B eats
-                        else
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ForceEat();
-                            ClearFoodTaken();
-                        }
+                        ClearFoodTaken(false);
+                        continue;
                     }
 
-                    //If agent A doesn't flee...
-                    else
+                    //If there's only one agent, let it eat and be happy
+                    if (agents.Count == 1)
                     {
-                        //...and agent B flees, agent A eats
-                        if (agents[1].willFleeAgainstEnemy)
-                        {
-                            agents[1].ReturnToLastPos();
-                            agents[0].ForceEat();
-                            ClearFoodTaken();
-                        }
+                        agents[0].ForceEat();
+                        ClearFoodTaken();
+                        continue;
+                    }
 
-                        //...and agent B doesn't flee, somebody dies, somebody eats
-                        else
-                        {
-                            float survChance = Random.Range(0, 1f);
+                    //If can't interact with enemies yet, only the first one will eat
+                    if (!bothPopsCanSeeEnemies)
+                    {
+                        agents[0].ForceEat();
+                        ClearFoodTaken();
+                        break;
+                    }
 
-                            if (survChance < 0.5f)
+                    //If they're not the same team, fight
+                    if (agents[0].isTeam1 != agents[1].isTeam1)
+                    {
+                        //If agent A flees...
+                        if (agents[0].willFleeAgainstEnemy)
+                        {
+                            //...and agent B flees too, nobody eats, nobody dies
+                            if (agents[1].willFleeAgainstEnemy)
                             {
-                                agents[0].Die();
-                                agents[1].ForceEat();
+                                agents[0].ReturnToLastPos();
+                                agents[1].ReturnToLastPos();
+                                ClearFoodTaken(false);
                             }
+
+                            //...and agent B doesn't flee, agent B eats
                             else
                             {
-                                agents[1].Die();
-                                agents[0].ForceEat();
+                                agents[0].ReturnToLastPos();
+                                agents[1].ForceEat();
+                                ClearFoodTaken();
                             }
-                            ClearFoodTaken();
                         }
-                    }
-                }
 
-                //Else, share (Unless they can't interact with allies yet, then only the first one will eat)
-                else if (!bothPopsCanSeeAllies)
-                {
-                    agents[0].ForceEat();
-                    ClearFoodTaken();
-                    break;
-                }
-                else
-                {
-                    //If Agent A will pass...
-                    if (agents[0].willGiveFoodToAlly)
-                    {
-                        //...and Agent B too, none of them eat
-                        if (agents[1].willGiveFoodToAlly)
-                        {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ReturnToLastPos();
-                            ClearFoodTaken(false);
-                        }
-                        //...but Agent B won't, Agent B eats
+                        //If agent A doesn't flee...
                         else
                         {
-                            agents[0].ReturnToLastPos();
-                            agents[1].ForceEat();
-                            ClearFoodTaken();
+                            //...and agent B flees, agent A eats
+                            if (agents[1].willFleeAgainstEnemy)
+                            {
+                                agents[1].ReturnToLastPos();
+                                agents[0].ForceEat();
+                                ClearFoodTaken();
+                            }
+
+                            //...and agent B doesn't flee, somebody dies, somebody eats
+                            else
+                            {
+                                float survChance = Random.Range(0, 1f);
+
+                                if (survChance < 0.5f)
+                                {
+                                    agents[0].Die();
+                                    agents[1].ForceEat();
+                                }
+                                else
+                                {
+                                    agents[1].Die();
+                                    agents[0].ForceEat();
+                                }
+
+                                ClearFoodTaken();
+                            }
                         }
                     }
-                    //Else, if Agent A won't pass...
+
+                    //Else, share (Unless they can't interact with allies yet, then only the first one will eat)
+                    else if (!bothPopsCanSeeAllies)
+                    {
+                        agents[0].ForceEat();
+                        ClearFoodTaken();
+                        break;
+                    }
                     else
                     {
-                        //...but Agent B will, Agent A eats
-                        if (agents[1].willGiveFoodToAlly)
+                        //If Agent A will pass...
+                        if (agents[0].willGiveFoodToAlly)
                         {
-                            agents[1].ReturnToLastPos();
-                            agents[0].ForceEat();
-                            ClearFoodTaken();
+                            //...and Agent B too, none of them eat
+                            if (agents[1].willGiveFoodToAlly)
+                            {
+                                agents[0].ReturnToLastPos();
+                                agents[1].ReturnToLastPos();
+                                ClearFoodTaken(false);
+                            }
+                            //...but Agent B won't, Agent B eats
+                            else
+                            {
+                                agents[0].ReturnToLastPos();
+                                agents[1].ForceEat();
+                                ClearFoodTaken();
+                            }
                         }
-                        //...and Agent B neither, both eat a little
+                        //Else, if Agent A won't pass...
                         else
                         {
-                            agents[0].ForceEat(1);
-                            agents[1].ForceEat(1);
-                            ClearFoodTaken();
+                            //...but Agent B will, Agent A eats
+                            if (agents[1].willGiveFoodToAlly)
+                            {
+                                agents[1].ReturnToLastPos();
+                                agents[0].ForceEat();
+                                ClearFoodTaken();
+                            }
+                            //...and Agent B neither, both eat a little
+                            else
+                            {
+                                agents[0].ForceEat(1);
+                                agents[1].ForceEat(1);
+                                ClearFoodTaken();
+                            }
                         }
                     }
                 }

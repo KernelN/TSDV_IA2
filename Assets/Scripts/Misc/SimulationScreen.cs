@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace IA.Game
@@ -62,6 +64,14 @@ namespace IA.Game
                 worstFitnessTxt.text = string.Format(worstFitText, popManager.worstFitness);
             }
         }
+
+        [System.Serializable]
+        struct TpsPerPopulation
+        {
+            public float tps;
+            public float pops;
+        }
+
         
         [SerializeField] PopulationUI pop1UI;
         [SerializeField] PopulationUI pop2UI;
@@ -69,6 +79,9 @@ namespace IA.Game
         public Text turnTxt;
         public Text timerTxt;
         public Slider timerSlider;
+        float currentTimeRatio = 1;
+        [SerializeField] List<TpsPerPopulation> tpsPerPopulation;
+        AnimationCurve tpsPerPopulationCurve;
         public Button pauseBtn;
         public Button stopBtn;
         public InputField saveInput;
@@ -83,16 +96,22 @@ namespace IA.Game
         // Start is called before the first frame update
         void Start()
         {
-            for (int i = 0; i < layouts.Length; i++)
-            {
+            for (int i = 0; i < layouts.Length; i++) 
                 layouts[i].enabled = false;
-            }
             
             timerSlider.onValueChanged.AddListener(OnTimerChange);
+            currentTimeRatio = timerSlider.value;
+            tpsPerPopulationCurve = new AnimationCurve();
+            Keyframe[] keys = new Keyframe[tpsPerPopulation.Count];
+            for (int i = 0; i < tpsPerPopulation.Count; i++) 
+                keys[i] = new Keyframe(tpsPerPopulation[i].pops, tpsPerPopulation[i].tps, 0, 0);
+            tpsPerPopulationCurve.keys = keys;
             timerText = timerTxt.text;
             turnText = turnTxt.text;
 
             popsManager = Population.PopulationsManager.Instance;
+            popsManager.SimulationStarted += UpdateTime;
+            popsManager.GenerationChanged += UpdateTime;
             timerTxt.text = string.Format(timerText, popsManager.TurnsPerSecond);
 
             pop1UI.Set(popsManager.Pop1);
@@ -102,12 +121,20 @@ namespace IA.Game
             stopBtn.onClick.AddListener(OnStopButtonClick);
             saveBtn.onClick.AddListener(OnSaveButtonClick);
         }
+        void UpdateTime()
+        {
+            int pop = popsManager.Pop1.populationCount + popsManager.Pop2.populationCount;
+            int tps = (int)(tpsPerPopulationCurve.Evaluate(pop) * currentTimeRatio);
+            if(tps < 5) tps = 5;
+            popsManager.TurnsPerSecond = tps;
+        }
         void OnEnable()
         {
             if(!popsManager) return;
             pop1UI.Set(popsManager.Pop1);
             pop2UI.Set(popsManager.Pop2);
         }
+
         void LateUpdate()
         {
             if(!popsManager) return;
@@ -118,13 +145,14 @@ namespace IA.Game
             }
             pop1UI.Update();
             pop2UI.Update();
+            timerTxt.text = string.Format(timerText, popsManager.TurnsPerSecond);
         }
 
         void OnTimerChange(float value)
         {
             if(value <= 0) return;
-            popsManager.TurnsPerSecond = (int)value;
-            timerTxt.text = string.Format(timerText, popsManager.TurnsPerSecond);
+            currentTimeRatio = value;
+            UpdateTime();
         }
         void OnPauseButtonClick()
         {

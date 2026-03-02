@@ -4339,8 +4339,8 @@ MonoBehaviour:
   m_Direction: 0
   m_MinValue: 5
   m_MaxValue: 2000
-  m_WholeNumbers: 1
-  m_Value: 5
+  m_WholeNumbers: 0
+  m_Value: 0
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -6250,6 +6250,19 @@ MonoBehaviour:
   turnTxt: {fileID: 5089902953212544699}
   timerTxt: {fileID: 8457165806316797678}
   timerSlider: {fileID: 8457165806042138537}
+  tpsPerPopulation:
+  - tps: 1200
+    pops: 30
+  - tps: 800
+    pops: 60
+  - tps: 500
+    pops: 80
+  - tps: 350
+    pops: 100
+  - tps: 100
+    pops: 150
+  - tps: 60
+    pops: 200
   pauseBtn: {fileID: 8457165805874990383}
   stopBtn: {fileID: 8457165807194034826}
   saveInput: {fileID: 7870569589363381869}
