@@ -1032,27 +1032,27 @@ MonoBehaviour:
     MutationRate: 0.1
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 9
-    OutputsCount: 5
-    HiddenLayers: 7
+    InputsCount: 10
+    OutputsCount: 6
+    HiddenLayers: 6
     NeuronsCountPerHL: 25
     Bias: -3.17
     P: 0.25
-    EnemiesAvgFitness: 10
-    AlliesAvgFitness: 20
+    EnemiesAvgFitness: 30
+    AlliesAvgFitness: 50
   pop2:
     MutationChance: 0.1
-    MutationRate: 0.4
+    MutationRate: 0.3
     FirstStageElitePairs: 1
     MinEliteFitness: 1
-    InputsCount: 9
-    OutputsCount: 5
-    HiddenLayers: 7
+    InputsCount: 10
+    OutputsCount: 6
+    HiddenLayers: 6
     NeuronsCountPerHL: 25
     Bias: -3.17
     P: 0.25
-    EnemiesAvgFitness: 10
-    AlliesAvgFitness: 20
+    EnemiesAvgFitness: 30
+    AlliesAvgFitness: 50
 --- !u!4 &1500092832
 Transform:
   m_ObjectHideFlags: 0

@@ -31,12 +31,12 @@ namespace IA.Agent
         int gotCloserToFood;
         int gotAwayFromFood;
         int movedStraight;
-        float foodCount;
+        int foodCount;
 
-        public bool willSurvive { get; protected set; }
-        public bool canReproduce { get; protected set; }
-        public bool willFleeAgainstEnemy { get; protected set; }
-        public bool willGiveFoodToAlly { get; protected set; }
+        public bool willSurvive { get; protected set; } = false;
+        public bool canReproduce { get; protected set; } = false;
+        public bool willFleeAgainstEnemy { get; protected set; } = false;
+        public bool willGiveFoodToAlly { get; protected set; } = false;
         
         protected GeneAlgo.Genome genome;
         protected NeuralNet.NeuralNetwork brain;
@@ -74,7 +74,6 @@ namespace IA.Agent
             }
 
             foodID = index;
-            helpedAlly++;
         }
         public void SetNearAlly(AgentBase nearAlly)
         {
@@ -110,16 +109,16 @@ namespace IA.Agent
         }
         public void CalcFitness()
         {
-            fitness += 15 * gotCloserToFood;
-            if(movedStraight > 0)
-                fitness *= UnityEngine.Mathf.Pow(.97f, movedStraight);
-            
-            fitness += foodCount * 200;
+            fitness += 10 * gotCloserToFood;
             if(gotAwayFromFood > 0)
-                fitness *= UnityEngine.Mathf.Pow(.95f, gotAwayFromFood);
+                fitness *= UnityEngine.Mathf.Pow(.9f, gotAwayFromFood);
+            
+            fitness += foodCount * 17;
+            if(movedStraight > 0)
+                fitness *= UnityEngine.Mathf.Pow(.95f, movedStraight);
             
             fitness += survivedEnemy * 2;
-            fitness += helpedAlly * 10;
+            fitness += helpedAlly * 5;
             
             // if(foodsLost > 0)
             //     fitness *= UnityEngine.Mathf.Pow(.9f, foodsLost);
@@ -128,15 +127,16 @@ namespace IA.Agent
             //     fitness *= UnityEngine.Mathf.Pow(1.1f, foodCount);
 
             //Reward agents on reproducing, but not on being greedy
-            if (foodCount >= 2)
+            if (canReproduce)
             {
                 if (foodCount < 6)
-                    fitness *= 5f;
+                    fitness *= 20;
                 else
                     fitness = UnityEngine.Mathf.Pow(0.9f, foodCount);
             }
 
             if(fitness < System.Single.Epsilon) fitness = System.Single.Epsilon;
+            else if(fitness > 800) fitness = 800;
             genome.fitness = fitness;
         }
         public bool CanAdvanceGen()
@@ -156,7 +156,7 @@ namespace IA.Agent
             generation++;
             OnReset();
         }
-        public void ForceEat(float mod = 1) => OnEat(mod);
+        public void ForceEat(int mod = 2) => OnEat(mod);
 
         public void UnEat()
         {
@@ -283,18 +283,20 @@ namespace IA.Agent
             
             willSurvive = false;
             canReproduce = false;
+            willFleeAgainstEnemy = false;
+            willGiveFoodToAlly = false;
 
             lastDistToFood = int.MaxValue;
             lastDir = new Vec2(0,0);
             
             moved = 0;
-            survivedEnemy = 0;
             gotAwayFromFood = 0;
             gotCloserToFood = 0;
             movedStraight = 0;
             foodID = -1;
-            helpedAlly = 0;
             foodCount = 0;
+            survivedEnemy = 0;
+            helpedAlly = 0;
         }
         protected virtual void OnThink()
         {
@@ -318,15 +320,17 @@ namespace IA.Agent
             inputs.Add(willSurvive ? 1 : 0);
             inputs.Add(canReproduce ? 1 : 0);
             inputs.Add(canReproduce ? 1 : 0);
+            inputs.Add(canReproduce ? 1 : 0);
 
             if (distMag < lastDistToFood)
                 gotCloserToFood++;
-            else
+            else if(distMag > lastDistToFood)
                 gotAwayFromFood++;
             lastDistToFood = distMag;
 
             if (stage >= Stage.Enemies)
             {
+                //Is enemy close? Y/N
                 inputs.Add((nearEnemy.position - position).IntSqrMagnitude() < 5 ? 1 : 0);
                 //inputs.Add(0);
             }
@@ -336,6 +340,7 @@ namespace IA.Agent
             }
             if (stage >= Stage.Allies)
             {
+                //Is ally close? Y/N
                 inputs.Add((nearAlly.position - position).IntSqrMagnitude() < 5 ? 1 : 0);
                 //inputs.Add(0);
             }
@@ -352,7 +357,7 @@ namespace IA.Agent
             willFleeAgainstEnemy = outputs[4] > 0.5f;
             willGiveFoodToAlly = outputs[5] > 0.5f;
         }
-        protected virtual void OnEat(float foodEaten = 1)
+        protected virtual void OnEat(int foodEaten = 2)
         {
             //If couldn't survive, now it will, and if already could survive, now can reproduce
             if (!willSurvive)
@@ -370,7 +375,7 @@ namespace IA.Agent
         {
             survivedEnemy++;
         }
-        public virtual void OnGaveFoodToALly()
+        public virtual void OnGaveFoodToAlly()
         {
             //Only reward it if it can reproduce
             if(canReproduce)

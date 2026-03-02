@@ -260,10 +260,10 @@ namespace IA.Population
                 }
                 else
                 {
-                    if (!agents[0].willGiveFoodToAlly && !agents[1].willGiveFoodToAlly)
+                    if (!(agents[0].willGiveFoodToAlly || agents[1].willGiveFoodToAlly))
                     {
-                        agents[0].ForceEat(.5f);
-                        agents[1].ForceEat(.5f);
+                        agents[0].ForceEat(1);
+                        agents[1].ForceEat(1);
                         ConsumeFoodTaken();
                     }
                     else
@@ -271,7 +271,7 @@ namespace IA.Population
                         if (agents[0].willGiveFoodToAlly)
                         {
                             agents[0].ReturnToLastPos();
-                            agents[1].OnGaveFoodToALly();
+                            agents[0].OnGaveFoodToAlly();
                         }
                         else
                         {
@@ -282,7 +282,7 @@ namespace IA.Population
                         if (agents[1].willGiveFoodToAlly)
                         {
                             agents[1].ReturnToLastPos();
-                            agents[1].OnGaveFoodToALly();
+                            agents[1].OnGaveFoodToAlly();
                         }
                         else
                         {
