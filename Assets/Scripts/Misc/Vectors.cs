@@ -12,7 +12,15 @@ namespace Universal.FileManaging
             x = _x;
             y = _y;
         }
-        
+
+        public static int GetSqrMagnitude(Vec2Int vec) => vec.x * vec.x + vec.y * vec.y;
+        public static int GetSqrDistance(Vec2Int vec1, Vec2Int vec2)
+        {
+            Vec2Int vec;
+            vec.x = vec2.x - vec1.x;
+            vec.y = vec2.y - vec1.y;
+            return vec.x * vec.x + vec.y * vec.y;
+        }
         public static implicit operator UnityEngine.Vector2Int(Vec2Int vec)
         {
             return new UnityEngine.Vector2Int(vec.x, vec.y);

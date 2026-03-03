@@ -214,20 +214,24 @@ MonoBehaviour:
     - {r: 0, g: 0.8048496, b: 1, a: 0.4392157}
     - {r: 1, g: 0.76375884, b: 0, a: 0.4392157}
     - {r: 0.35169458, g: 0, b: 1, a: 0.4392157}
+    - {r: 0.31248856, g: 1, b: 0, a: 0.4392157}
+    - {r: 1, g: 0.3872052, b: 0, a: 0.4392157}
   - nodeHeight: 0.02
     possibleRegionColors:
     - {r: 0.9797268, g: 0, b: 1, a: 0.4392157}
     - {r: 0, g: 0.8048496, b: 1, a: 0.4392157}
     - {r: 1, g: 0.76375884, b: 0, a: 0.4392157}
     - {r: 0.35169458, g: 0, b: 1, a: 0.4392157}
-  useSavedData: 1
+    - {r: 0.31248856, g: 1, b: 0, a: 0.4392157}
+    - {r: 1, g: 0.3872052, b: 0, a: 0.4392157}
+  useSavedData: 0
   saveData: 0
   minePrefab: {fileID: 3390472241950091475, guid: 7cc5e9c857290fc47af95fddb553c4d3, type: 3}
-  mineCount: 8
+  mineCount: 6
   mineSettings:
     minerals: 30
     initialFood: 15
-  gizmosIndex: 0
+  gizmosIndex: 1
 --- !u!1 &182339971
 GameObject:
   m_ObjectHideFlags: 0
@@ -1746,7 +1750,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1013681626}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 3.2251, y: 1, z: 4.8061}
+  m_LocalPosition: {x: 3.78, y: 1, z: 4.8061}
   m_LocalScale: {x: 5.089783, y: 1, z: 2.4986417}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -145,11 +145,11 @@ namespace IA.Pathfinding
                     grids[i].Set(gridTransform, gridWorldSize);
             }
 
-            BuildMineRuntimeData(shouldLoadSavedData);
+            BuildMines(shouldLoadSavedData);
 
             for (int i = 0; i < pathfinders.Length; i++)
             {
-                pathfinders[i].SetPointsOfInterest(BuildPointsOfInterestFromRuntimeMines());
+                pathfinders[i].SetPointsOfInterest(BuildPointsOfInterestFromMines());
 
                 if (shouldLoadSavedData)
                     pathfinders[i].Load(grids[i], layerData[i].GetDictionary());
@@ -236,7 +236,7 @@ namespace IA.Pathfinding
 
             return true;
         }
-        void BuildMineRuntimeData(bool fromSavedData)
+        void BuildMines(bool fromSavedData)
         {
             mines.Clear();
 
@@ -292,7 +292,7 @@ namespace IA.Pathfinding
 
             for (int i = 0; i < mineIDs.Count; i++)
             {
-                Vector2Int gridPos = MineIdToGridPos(mineIDs[i], grids[0].gridSize.y);
+                Vector2Int gridPos = IdToGridPos(mineIDs[i], grids[0].gridSize.y);
                 SpawnMine(gridPos, mineIDs[i]);
             }
         }
@@ -301,7 +301,7 @@ namespace IA.Pathfinding
             if (gridPos.x < 0 || gridPos.x >= grids[0].gridSize.x) return;
             if (gridPos.y < 0 || gridPos.y >= grids[0].gridSize.y) return;
 
-            int id = forcedId == int.MinValue ? GridPosToMineId(gridPos, grids[0].gridSize.y) : forcedId;
+            int id = forcedId == int.MinValue ? GridPosToId(gridPos, grids[0].gridSize.y) : forcedId;
             Transform mineTransform = Instantiate(minePrefab).transform;
             mineTransform.parent = transform;
             mineTransform.position = grids[0].grid[gridPos.x, gridPos.y].worldPos;
@@ -313,7 +313,7 @@ namespace IA.Pathfinding
                 transform = mineTransform
             });
         }
-        List<PointOfInterest> BuildPointsOfInterestFromRuntimeMines()
+        List<PointOfInterest> BuildPointsOfInterestFromMines()
         {
             List<PointOfInterest> points = new List<PointOfInterest>(mines.Count);
             for (int i = 0; i < mines.Count; i++)
@@ -338,11 +338,11 @@ namespace IA.Pathfinding
         {
             return Mathf.RoundToInt(gridWorldSize.y / grid.NodeDiameter);
         }
-        public static int GridPosToMineId(Vector2Int gridPos, int gridHeight)
+        public int GridPosToId(Vector2Int gridPos, int gridHeight)
         {
             return gridPos.x * gridHeight + gridPos.y;
         }
-        public static Vector2Int MineIdToGridPos(int id, int gridHeight)
+        public Vector2Int IdToGridPos(int id, int gridHeight)
         {
             int x = id / gridHeight;
             int y = id % gridHeight;

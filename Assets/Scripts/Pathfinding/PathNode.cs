@@ -7,21 +7,14 @@ namespace IA.Pathfinding.Grid
     [System.Serializable]
     public class PathNode
     {
+        // Static/authoring map data only.
+        // Search bookkeeping is kept in AStarPathfinder.NodeRecord so PathNode stays immutable during queries.
         public bool walkable;
         public Universal.FileManaging.Vec3 worldPos;
         public Universal.FileManaging.Vec2Int gridPos;
         public int weight;
 
-        /// <summary> Distance from start </summary>
-        public int gCost; 
-        /// <summary> Distance to target </summary>
-        public int hCost;
-        
-        public PathNode parent;
         public List<PathNode> neighbours = new List<PathNode>();
-        
-        /// <summary> Distance to target </summary>
-        public int FCost { get { return gCost + hCost; } } 
         
         public PathNode(){ neighbours = new List<PathNode>(); }
         public PathNode(bool _walkable, Vector3 _worldPos, Vector2Int _gridPos, int _weight = 0)
