@@ -198,8 +198,6 @@ namespace IA.Population
         {
             // Increment generation counter
             generation++;
-
-            populationCount = populationControllers.Count;
             
             //Calculate the fitness of all agents
             for (int i = 0; i < populationControllers.Count; i++)
@@ -230,7 +228,12 @@ namespace IA.Population
                 
                 //If none will reproduce, check if someone will survive
                 if(reproGenomes.Count < 2)
-                    if(eliteGenomes.Count < 2) return false;
+                    //If none will survive, the Epoch failed
+                    if (eliteGenomes.Count < 2)
+                    {
+                        populationCount = populationControllers.Count;
+                        return false;
+                    }
                 
                 // Evolve each genome and create a new array of genomes
                 newGenomes = genAlg.Epoch(eliteGenomes.ToArray(), reproGenomes.ToArray());
@@ -298,6 +301,8 @@ namespace IA.Population
                 map.population1 = populationControllers;
             else
                 map.population2 = populationControllers;
+
+            populationCount = populationControllers.Count;
 
             return true;
         }
@@ -482,6 +487,7 @@ namespace IA.Population
             population.RemoveAt(index);
             populationControllers.RemoveAt(index);
             agent.Died -= OnAgentDied;
+            populationCount = populationControllers.Count;
         }
 
         #region Helpers
