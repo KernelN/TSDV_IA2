@@ -15,6 +15,19 @@ namespace IA.Pathfinding
     }
 
     [Serializable]
+    public struct TerrainCellChange
+    {
+        public Vector2Int gridPos;
+        public int layerIndex;
+
+        public TerrainCellChange(Vector2Int gridPos, int layerIndex)
+        {
+            this.gridPos = gridPos;
+            this.layerIndex = layerIndex;
+        }
+    }
+
+    [Serializable]
     public struct LayerData
     {
         //Grid
@@ -121,15 +134,20 @@ namespace IA.Pathfinding
         [SerializeField] GameObject minePrefab;
         [SerializeField, Min(1)] int mineCount = 5;
         [SerializeField] MineSettings mineSettings;
+        [Header("Terrain Recalculation")]
+        [SerializeField, Min(0f)] float terrainRecalcMaxDuration = 0.1f;
 
         string dataRoot;
 
         LayerData[] layerData;
         bool shouldLoadSavedData;
         List<Mine> mines = new List<Mine>();
+        readonly Dictionary<int, HashSet<Vector2Int>> queuedTerrainChangesByLayer = new Dictionary<int, HashSet<Vector2Int>>();
 
         [Header("DEBUG")]
         [SerializeField, Min(0)] int gizmosIndex;
+
+        public event Action<int> OnVoronoiLayerCommitted;
 
         //Unity Events
         void Awake()
@@ -183,6 +201,16 @@ namespace IA.Pathfinding
                 FileManager<LayerData>.SaveDataToFile(newData, dataPath);
             }
         }
+        void Update()
+        {
+            float now = Time.realtimeSinceStartup;
+            for (int i = 0; i < pathfinders.Length; i++)
+            {
+                pathfinders[i].TickTerrainRecalculation(now);
+                if (pathfinders[i].CommitPendingTerrainVoronoi())
+                    OnVoronoiLayerCommitted?.Invoke(i);
+            }
+        }
         void OnDrawGizmos()
         {
             if (grids.Length > 0)
@@ -196,8 +224,55 @@ namespace IA.Pathfinding
             if(gizmosIndex >= grids.Length)
                 gizmosIndex = grids.Length - 1;
         }
-        
+
         //Methods
+        /// <summary>
+        /// Tag all cells for a rescan (to confirm whether they need recalculation or not)
+        /// </summary>
+        public void QueueAllTerrainCellsForRescan()
+        {
+            for (int layer = 0; layer < grids.Length; layer++)
+            {
+                //Make sure all layers have a queue
+                if (!queuedTerrainChangesByLayer.TryGetValue(layer, out HashSet<Vector2Int> queuedCells))
+                {
+                    queuedCells = new HashSet<Vector2Int>();
+                    queuedTerrainChangesByLayer[layer] = queuedCells;
+                }
+
+                //Add all cells to queue
+                for (int x = 0; x < grids[layer].gridSize.x; x++)
+                for (int y = 0; y < grids[layer].gridSize.y; y++)
+                    queuedCells.Add(new Vector2Int(x, y));
+            }
+        }
+        public void SetCellsForRecalculation()
+        {
+            if (queuedTerrainChangesByLayer.Count <= 0)
+                return;
+
+            foreach (KeyValuePair<int, HashSet<Vector2Int>> entry in queuedTerrainChangesByLayer)
+            {
+                int layer = entry.Key;
+                
+                //Use hash set as it's much faster than list for an unordered collection
+                //( O(1) vs O(n) )
+                HashSet<Vector2Int> queuedCells = entry.Value;
+                if (queuedCells == null || queuedCells.Count <= 0)
+                    continue;
+
+                //Get deltas off all nodes that changed
+                List<Grid.NodeTerrainDelta> deltas = grids[layer].RefreshCells(queuedCells);
+                queuedCells.Clear();
+
+                if (deltas.Count <= 0)
+                    continue;
+
+                pathfinders[layer].RequestTerrainRecalculation(deltas, terrainRecalcMaxDuration);
+            }
+
+            queuedTerrainChangesByLayer.Clear();
+        }
         bool TryLoadAndValidateData()
         {
             layerData = new LayerData[grids.Length];
@@ -384,3 +459,4 @@ namespace IA.Pathfinding
         }
     }
 }
+

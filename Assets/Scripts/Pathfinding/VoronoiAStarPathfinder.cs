@@ -7,17 +7,8 @@ using Random = UnityEngine.Random;
 namespace IA.Pathfinding.Voronoi
 {
     [System.Serializable]
-    public class PointOfInterest
-    {
-        public Transform t;
-        public Vector2Int gridPos;
-        public int id;
-    }
-    
-    [System.Serializable]
     public class VoronoiAStarPathfinder : AStar.AStarPathfinder
     {
-        //[Header("Runtime Values")]
         List<PointOfInterest> pointsOfInterest;
         List<PointOfInterest> currentPOIs;
         Dictionary<int, PointOfInterest> pointsById;
@@ -29,211 +20,72 @@ namespace IA.Pathfinding.Voronoi
         int[] nearestCostByNodeIndex;
         float[][] regionsCostByNodeIndex;
         int[] poiIdsByCostColumn;
+        int[][] neighbourIndicesByNode;
+        readonly object poiLock = new object();
+        readonly object terrainStateLock = new object();
+        readonly Dictionary<int, NodeTerrainDelta> queuedTerrainChangesByNode = new Dictionary<int, NodeTerrainDelta>();
+
+        Voronoi activeVoronoi;
+        Voronoi stagedTerrainVoronoi;
+
+        Task<Voronoi> runningTerrainTask;
+        bool terrainTaskRunning;
+        bool terrainRequestPending;
+        float terrainRequestDeadline;
+
+        int terrainRequestVersion;
+        int poiVersion;
         [Header("DEBUG")]
-        [SerializeField, Range(0.001f,1)] float nodeHeight = 0.5f;
+        [SerializeField, Range(0.001f, 1)] float nodeHeight = 0.5f;
         [SerializeField] Color[] possibleRegionColors;
         Dictionary<int, Color> colorsByRegion;
 
-        /// <summary>
-        /// Stores the index of the node in the grid,
-        /// the Id of the owner POI
-        /// and the distance to the POI
-        /// </summary>
-        struct RegionNode
-        {
-            public int nodeIndex, poiId, distance;
-
-            public RegionNode(int index, int poiId, int distance)
-            {
-                nodeIndex = index;
-                this.poiId = poiId;
-                this.distance = distance;
-            }
-        }
-        /// <summary>
-        /// Binary Tree which sorts nodes from smallest to biggest
-        /// </summary>
-        class MinPriorityQueue
-        {
-            //Don't use a real queue because it wouldn't let us sort it
-            List<RegionNode> queue = new List<RegionNode>();
-
-            public int Count => queue.Count;
-
-            /// <summary>
-            /// Insert node at the end of the queue, then Sort with BubbleUp
-            /// </summary>
-            public void Enqueue(int nodeIndex, int poiId, int distance)
-            {
-                queue.Add(new RegionNode(nodeIndex, poiId, distance));
-                BubbleUp(queue.Count - 1);
-            }
-            
-            /// <summary>
-            /// Extract node from the beginning of the queue (the smallest one),
-            /// move the last node to the beginning of the queue (the biggest one)
-            /// and then sort it down until everything is sorted again
-            /// </summary>
-            public RegionNode Dequeue()
-            {
-                //Extract root / smallest node
-                RegionNode root = queue[0];
-                
-                //Move the last node to the beginning of the queue
-                int lastIndex = queue.Count - 1;
-                queue[0] = queue[lastIndex];
-
-                queue.RemoveAt(lastIndex); //Clean duplicate
-                
-                //Sort / sink the value down the tree
-                if (queue.Count > 0)
-                    BubbleDown(0);
-
-                //Return the light node
-                return root;
-            }
-
-            /// <summary>
-            /// Check and sort through all of the parents of the node
-            /// until it hits with a node of smaller distance
-            /// (parents with a bigger value than the current node get swapped)
-            /// </summary>
-            /// <param name="index">index of the node in the list</param>
-            void BubbleUp(int index)
-            {
-                //https://youtu.be/PkCBI4BKeb8?si=0-ndqONcZYKuuC8y BubbleUp/Down
-                while (index > 0)
-                {
-                    //BinaryTrees nodes, by convention, are sorted breath-first in the collection
-                    //regardless of how the algorithm later explores them (in the BinaryTree)
-                    //see: https://youtube.com/shorts/4NYk5vW_5yc?si=f7Euvxi3VGL3utwJ
-                    //for a graphical example
-                    int parent = (index - 1) / 2;
-                    
-                    //If parent is smaller, end the sort
-                    if (queue[parent].distance <= queue[index].distance) 
-                        break;
-
-                    //Swap the nodes value and continue sorting 
-                    (queue[parent], queue[index]) = (queue[index], queue[parent]);
-                    
-                    //As the values where sorted,
-                    //the index of the inserted node is now the index of its old parent
-                    index = parent;
-                }
-            }
-
-            /// <summary>
-            /// Check and sort through the smallest childs of the node (down their branches)
-            /// until it hits with a node of bigger distance / value
-            /// </summary>
-            /// <param name="index"></param>
-            void BubbleDown(int index)
-            {
-                //https://youtu.be/PkCBI4BKeb8?si=0-ndqONcZYKuuC8y BubbleUp/Down
-                int last = queue.Count - 1;
-                while (true)
-                {
-                    int left = index * 2 + 1; //inverted find parent formula
-                    if (left > last)
-                        return;
-
-                    int right = left + 1; //(as it goes from L > R, the right child is left + 1
-                    
-                    //Get the index of the smallest child
-                    int smallest = left;
-                    if (right <= last && queue[right].distance < queue[left].distance)
-                        smallest = right;
-
-                    //If the smallest child is smaller than the current node, we good
-                    if (queue[index].distance <= queue[smallest].distance)
-                        return;
-
-                    //If it's bigger than the current node (it should usually be), keep sorting
-                    (queue[index], queue[smallest]) = (queue[smallest], queue[index]);
-                    index = smallest;
-                }
-            }
-        }
-
-        //Set Methods
         public override void Set(PathGrid grid)
         {
             base.Set(grid);
 
-            currentPOIs = new List<PointOfInterest>();
-            pointsByPos = new Dictionary<Vector2Int, PointOfInterest>();
-            pointsById = new Dictionary<int, PointOfInterest>();
-            
-            regionsByNode = new Dictionary<Vector2Int, int>();
-            nearestCostByNode = new Dictionary<Vector2Int, int>();
-            regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
+            InitializeRuntimeCollections();
+            BuildPointsLookup();
+            neighbourIndicesByNode = grid.BuildNeighbourIndicesByNode();
 
-            //Set positions of interest
-            for (int i = 0; i < pointsOfInterest.Count; i++)
+            lock (poiLock)
             {
-                if (pointsOfInterest[i].t == null)
-                {
-                    Debug.LogError("Point of interest " + i + " has no transform");
-                    continue;
-                }
-                
-                if (pointsOfInterest[i].id == 0)
-                    pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
-
-                pointsOfInterest[i].gridPos = grid.GetGridPosition(pointsOfInterest[i].t.position);
-                pointsById.Add(pointsOfInterest[i].id, pointsOfInterest[i]);
-                pointsByPos.Add(pointsOfInterest[i].gridPos, pointsOfInterest[i]);
+                currentPOIs.Clear();
+                currentPOIs.AddRange(pointsOfInterest);
             }
-            
-            currentPOIs.AddRange(pointsOfInterest);
-            
+
             CalculateVoronoi();
+
+#if UNITY_EDITOR
+            SetGizmoColors();
+#endif
         }
         public void Load(PathGrid grid, Dictionary<Vector2Int, Dictionary<int, float>> regionsCostByNode)
         {
             base.Set(grid);
 
-            currentPOIs = new List<PointOfInterest>();
-            pointsByPos = new Dictionary<Vector2Int, PointOfInterest>();
-            pointsById = new Dictionary<int, PointOfInterest>();
-            
-            regionsByNode = new Dictionary<Vector2Int, int>();
-            nearestCostByNode = new Dictionary<Vector2Int, int>();
-            
-            if(regionsCostByNode == null)
+            InitializeRuntimeCollections();
+            BuildPointsLookup();
+            neighbourIndicesByNode = grid.BuildNeighbourIndicesByNode();
+
+            if (regionsCostByNode == null)
                 this.regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
             else
                 this.regionsCostByNode = regionsCostByNode;
 
-            //Set positions of interest
-            for (int i = 0; i < pointsOfInterest.Count; i++)
+            lock (poiLock)
             {
-                if (pointsOfInterest[i].t == null)
-                {
-                    Debug.LogError("Point of interest " + i + " has no transform");
-                    continue;
-                }
-                
-                if (pointsOfInterest[i].id == 0)
-                    pointsOfInterest[i].id = pointsOfInterest[i].t.GetInstanceID();
-
-                pointsOfInterest[i].gridPos = grid.GetGridPosition(pointsOfInterest[i].t.position);
-                pointsById.Add(pointsOfInterest[i].id, pointsOfInterest[i]);
-                pointsByPos.Add(pointsOfInterest[i].gridPos, pointsOfInterest[i]);
+                currentPOIs.Clear();
+                currentPOIs.AddRange(pointsOfInterest);
             }
-            
-            currentPOIs.AddRange(pointsOfInterest);
-            
-            if(regionsCostByNode == null)
+
+            if (regionsCostByNode == null)
                 CalculateVoronoi();
             else
-            {
                 UpdateVoronoi();
-            }
-            
+
 #if UNITY_EDITOR
-                SetGizmoColors();
+            SetGizmoColors();
 #endif
         }
 
@@ -243,32 +95,34 @@ namespace IA.Pathfinding.Voronoi
         }
         public void DrawGizmos()
         {
-            if(regionsByNode == null) return;
-            if (currentPOIs.Count <= 0) return;
-            if (possibleRegionColors.Length <= 0) return;
+            Voronoi snapshot = activeVoronoi;
+            if (snapshot == null || snapshot.regionsByNodeIndex == null)
+                return;
+
+            if (currentPOIs == null || currentPOIs.Count <= 0)
+                return;
+
+            if (possibleRegionColors == null || possibleRegionColors.Length <= 0)
+                return;
 
             if (colorsByRegion == null)
-            {
                 SetGizmoColors();
-            }
-            
-            //Draw regions
+
             Vector3 nodeSize = new Vector3(grid.NodeDiameter, nodeHeight, grid.NodeDiameter);
             for (int x = 0; x < grid.gridSize.x; x++)
             {
                 for (int y = 0; y < grid.gridSize.y; y++)
                 {
-                    int region = regionsByNode[new Vector2Int(x,y)];
-                    
+                    int region = FindPointRegion(new Vector2Int(x, y));
+
                     colorsByRegion.TryGetValue(region, out Color regionColor);
                     Gizmos.color = regionColor;
-                    
+
                     Gizmos.DrawCube(grid.grid[x, y].worldPos, nodeSize);
                 }
             }
         }
-        
-        //Public Methods
+
         public int FindPointRegion(Vector3 point)
         {
             Vector2Int gridPos = grid.GetGridPosition(point);
@@ -276,10 +130,14 @@ namespace IA.Pathfinding.Voronoi
         }
         public int FindPointRegion(Vector2Int gridPos)
         {
-            int index = GetFlatNodeIndex(gridPos);
-            if (index >= 0 && regionsByNodeIndex != null)
-                return regionsByNodeIndex[index];
-            
+            Voronoi snapshot = activeVoronoi;
+            if (snapshot == null || snapshot.regionsByNodeIndex == null)
+                return -1;
+
+            int index = grid.GetFlatNodeIndex(gridPos);
+            if (index >= 0)
+                return snapshot.regionsByNodeIndex[index];
+
             return -1;
         }
         public int FindSafePointRegion(Vector3 point)
@@ -293,10 +151,9 @@ namespace IA.Pathfinding.Voronoi
             if (region != -1)
                 return region;
 
-            if (!IsValidGridPosition(gridPos))
+            if (!grid.IsValidGridPosition(gridPos))
                 return -1;
 
-            // Keep fallback local: only check direct neighbours around the original world-point cell.
             PathNode startNode = grid.grid[gridPos.x, gridPos.y];
             for (int i = 0; i < startNode.neighbours.Count; i++)
             {
@@ -320,103 +177,91 @@ namespace IA.Pathfinding.Voronoi
         {
             if (pointsByPos.TryGetValue(gridPos, out PointOfInterest poi))
                 return poi.id;
-            
+
             return -1;
-            
-        }
-        public PathNode GetPositionOfInterest(int region)
-        {
-            if (currentPOIs.Count <= 0) return null;
-
-            PointOfInterest poi;
-            pointsById.TryGetValue(region, out poi);
-
-            if (poi == null) return null;
-            
-            return grid.grid[poi.gridPos.x, poi.gridPos.y];
         }
         public List<PathNode> FindPathToPOI(Vector3 startPos)
         {
             int region = FindSafePointRegion(startPos);
-            
             return FindPathToPOI(startPos, region);
         }
         public List<PathNode> FindPathToPOI(Vector3 startPos, int region)
         {
-            PointOfInterest poi;
-            pointsById.TryGetValue(region, out poi);
-            
-            if(poi == null) return null;
-            
-            //Necessary for multithreading
+            if (!pointsById.TryGetValue(region, out PointOfInterest poi))
+                return null;
+
             PathNode startNode = grid.NodeFromWorldPoint(startPos);
             PathNode endNode = grid.grid[poi.gridPos.x, poi.gridPos.y];
-            
+
             return FindPath(startNode, endNode);
         }
         public void RemovePointOfInterest(Vector2Int gridPos)
         {
-            int region;
-
-            if(!regionsByNode.TryGetValue(gridPos, out region)) return;
+            int region = FindPointRegion(gridPos);
+            if (region < 0)
+                return;
 
             RemovePointOfInterest(region);
         }
         public void RemovePointOfInterest(int region)
         {
-            PointOfInterest poi;
-            pointsById.TryGetValue(region, out poi);
-            
-            if(poi == null) return;
-            
+            if (!pointsById.TryGetValue(region, out PointOfInterest poi))
+                return;
+
             pointsById.Remove(region);
-            currentPOIs.Remove(poi);
-            
+            pointsByPos.Remove(poi.gridPos);
+
+            lock (poiLock)
+            {
+                currentPOIs.Remove(poi);
+            }
+
+            InvalidateTerrainRecalculationForPoiChange();
             UpdateVoronoi();
         }
         public void UpdatePointsOfInterest(List<int> pointsID)
         {
+            if (pointsID == null)
+                pointsID = new List<int>();
+
             bool needsToBeUpdated = false;
 
-            if (pointsID.Count == currentPOIs.Count)
+            lock (poiLock)
             {
-                //Check if positions are the same (even if in different order)
-                for (int i = 0; i < pointsID.Count; i++)
+                if (pointsID.Count == currentPOIs.Count)
                 {
-                    if (!pointsID.Contains(currentPOIs[i].id))
+                    HashSet<int> newIds = new HashSet<int>(pointsID);
+                    for (int i = 0; i < currentPOIs.Count; i++)
                     {
-                        needsToBeUpdated = true;
-                        break;
+                        if (!newIds.Contains(currentPOIs[i].id))
+                        {
+                            needsToBeUpdated = true;
+                            break;
+                        }
                     }
                 }
-            }
-            else 
-                needsToBeUpdated = true;
-            
-            if(!needsToBeUpdated) return;
-            
-            currentPOIs.Clear();
-            
-            //Get new points of interest
-            for (int i = 0; i < pointsID.Count; i++)
-            {
-                PointOfInterest poi;
-                if(pointsById.TryGetValue(pointsID[i], out poi))
+                else
                 {
-                    currentPOIs.Add(poi);
+                    needsToBeUpdated = true;
+                }
+
+                if (!needsToBeUpdated)
+                    return;
+
+                currentPOIs.Clear();
+                for (int i = 0; i < pointsID.Count; i++)
+                {
+                    if (pointsById.TryGetValue(pointsID[i], out PointOfInterest poi))
+                        currentPOIs.Add(poi);
                 }
             }
-            
+
+            InvalidateTerrainRecalculationForPoiChange();
             UpdateVoronoi();
-            
-            //THIS NEED TO BE UPDATED
-            // Dictionary<int, PointOfInterest> pointsById;
-            // Dictionary<Vector2Int, int> regionsByNode;
-            
-            
-            #if UNITY_EDITOR //UPDATE GIZMO COLORS
+
+#if UNITY_EDITOR
             SetGizmoColors();
-            #endif
+#endif
         }
         public Dictionary<Vector2Int, Dictionary<int, float>> GetRegionsCostByNode()
         {
@@ -428,138 +273,204 @@ namespace IA.Pathfinding.Voronoi
 
             return regionsCostByNode;
         }
-        
-        //Private Methods
-        void CalculateVoronoi()
+        public void RequestTerrainRecalculation(IReadOnlyList<NodeTerrainDelta> changes, float maxCalcSeconds)
         {
-            if (pointsOfInterest.Count <= 0) return;
-
-            regionsCostByNode.Clear();
-
-            BuildNearestRegionMap(currentPOIs);
-        }
-        void UpdateVoronoi()
-        {
-            //Update calls are typically POI-filter changes.
-            //Rebuild nearest labels via multi-source Dijkstra
-            BuildNearestRegionMap(currentPOIs);
-        }
-        void BuildNearestRegionMap(List<PointOfInterest> sources)
-        {
-            //Initialize nearest node lists
-            int nodeCount = grid.gridSize.x * grid.gridSize.y;
-            EnsureNearestNodeBuffers(nodeCount);
-
-            //If there are no POIs, clean up dictionaries 
-            if (sources == null || sources.Count <= 0)
-            {
-                SyncNearestRegionDictionary();
+            if (changes == null || changes.Count <= 0)
                 return;
-            }
 
-            MinPriorityQueue queue = new MinPriorityQueue();
-
-            // Seed all active POIs into one global queue.
-            for (int i = 0; i < sources.Count; i++)
+            lock (terrainStateLock)
             {
-                PointOfInterest source = sources[i];
-                if (source == null)
-                    continue;
+                for (int i = 0; i < changes.Count; i++)
+                    queuedTerrainChangesByNode[changes[i].nodeIndex] = changes[i];
 
-                if (!IsValidGridPosition(source.gridPos))
-                    continue;
-
-                PathNode sourceNode = grid.grid[source.gridPos.x, source.gridPos.y];
-                if (!sourceNode.walkable)
-                    continue;
-
-                //POI ids are stable mine identities and are intentionally decoupled from per-grid node indices. 
-                queue.Enqueue(GetFlatNodeIndex(source.gridPos), source.id, 0);
+                terrainRequestPending = true;
+                terrainRequestVersion++;
+                terrainRequestDeadline = Time.realtimeSinceStartup + Mathf.Max(0f, maxCalcSeconds);
             }
-
-            while (queue.Count > 0)
-            {
-                RegionNode current = queue.Dequeue();
-
-                //If there's already a better target for this node, skip
-                int bestDistance = nearestCostByNodeIndex[current.nodeIndex];
-                if (current.distance > bestDistance)
-                    continue;
-
-                if (current.distance == bestDistance)
-                {
-                    int currentBestPoi = regionsByNodeIndex[current.nodeIndex];
-                    if (currentBestPoi != -1 && current.poiId >= currentBestPoi)
-                        continue;
-                }
-
-                nearestCostByNodeIndex[current.nodeIndex] = current.distance;
-                regionsByNodeIndex[current.nodeIndex] = current.poiId;
-
-                //Store all node neighbours in the queue
-                Vector2Int currentPos = GetGridPositionFromIndex(current.nodeIndex);
-                PathNode currentNode = grid.grid[currentPos.x, currentPos.y];
-                for (int i = 0; i < currentNode.neighbours.Count; i++)
-                {
-                    PathNode neighbour = currentNode.neighbours[i]; //get neighbor
-                    
-                    if (!neighbour.walkable) continue; //check if walkable
-
-                    //Calculate cost
-                    int edgeCost = GetMovementCost(currentNode, neighbour);
-                    int nextDistance = current.distance + edgeCost;
-                    
-                    //Get neighbour grid id
-                    int neighbourIndex = GetFlatNodeIndex(neighbour.gridPos);
-
-                    //If it has a better distance to another POI, skip
-                    if (nextDistance > nearestCostByNodeIndex[neighbourIndex])
-                        continue;
-
-                    //If it doesn't, add to queue
-                    queue.Enqueue(neighbourIndex, current.poiId, nextDistance);
-                }
-            }
-
-            SyncNearestRegionDictionary();
         }
-        void BuildRegionsCostDictionaryFromIndexBuffer()
+        public void TickTerrainRecalculation(float now)
         {
+            Task<Voronoi> completedTask = null;
+            List<NodeTerrainDelta> jobChanges = null;
+            int jobVersion = 0;
+            int jobPoiVersion = 0;
+            bool shouldStartJob = false;
+
+            lock (terrainStateLock)
+            {
+                //If task is complete, tag it
+                if (terrainTaskRunning && runningTerrainTask != null && runningTerrainTask.IsCompleted)
+                {
+                    completedTask = runningTerrainTask;
+                    runningTerrainTask = null;
+                    terrainTaskRunning = false;
+                }
+
+                //If there are no tasks running and there IS a task pending,
+                //queue node changes and flag the task for starting immediately 
+                if (!terrainTaskRunning && terrainRequestPending && queuedTerrainChangesByNode.Count > 0 && now >= terrainRequestDeadline)
+                {
+                    jobChanges = new List<NodeTerrainDelta>(queuedTerrainChangesByNode.Values);
+                    queuedTerrainChangesByNode.Clear();
+                    terrainRequestPending = false;
+
+                    jobVersion = terrainRequestVersion;
+                    jobPoiVersion = poiVersion;
+                    shouldStartJob = true;
+                }
+            }
+
+            //Get result / voronoi snapshot of task tagged as complete
+            if (completedTask != null)
+                HandleCompletedTerrainTask(completedTask);
+
+            if (!shouldStartJob)
+                return;
+
+            grid.GetCurrentGridValues(out bool[] walkableByNode, out int[] weightByNode);
+            
+            
+            List<PoiSource> sources = GetCurrentPOIs();
+            
+            Voronoi baselineVoronoi = activeVoronoi.DeepClone();
+
+            Task<Voronoi> startedTask = Task.Run(
+                () => Voronoi.BuildTerrainRecalculationVoronoi(jobVersion, jobPoiVersion, sources, walkableByNode, weightByNode,
+                    jobChanges, baselineVoronoi, neighbourIndicesByNode, grid));
+
+            lock (terrainStateLock)
+            {
+                runningTerrainTask = startedTask;
+                terrainTaskRunning = true;
+            }
+        }
+        public bool CommitPendingTerrainVoronoi()
+        {
+            Voronoi voronoiToCommit;
+
+            lock (terrainStateLock)
+            {
+                if (stagedTerrainVoronoi == null)
+                    return false;
+
+                if (stagedTerrainVoronoi.version < terrainRequestVersion)
+                {
+                    stagedTerrainVoronoi = null;
+                    return false;
+                }
+
+                if (stagedTerrainVoronoi.poiVersion != poiVersion)
+                {
+                    stagedTerrainVoronoi = null;
+                    return false;
+                }
+
+                voronoiToCommit = stagedTerrainVoronoi;
+                stagedTerrainVoronoi = null;
+            }
+
+            SetActiveVoronoi(voronoiToCommit);
+
+#if UNITY_EDITOR
+            SetGizmoColors();
+#endif
+
+            return true;
+        }
+        void InitializeRuntimeCollections()
+        {
+            if (pointsOfInterest == null)
+                pointsOfInterest = new List<PointOfInterest>();
+
+            if (currentPOIs == null)
+                currentPOIs = new List<PointOfInterest>();
+            else
+                currentPOIs.Clear();
+
+            if (pointsByPos == null)
+                pointsByPos = new Dictionary<Vector2Int, PointOfInterest>();
+            else
+                pointsByPos.Clear();
+
+            if (pointsById == null)
+                pointsById = new Dictionary<int, PointOfInterest>();
+            else
+                pointsById.Clear();
+
+            if (regionsByNode == null)
+                regionsByNode = new Dictionary<Vector2Int, int>();
+            else
+                regionsByNode.Clear();
+
+            if (nearestCostByNode == null)
+                nearestCostByNode = new Dictionary<Vector2Int, int>();
+            else
+                nearestCostByNode.Clear();
+
             if (regionsCostByNode == null)
                 regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
             else
                 regionsCostByNode.Clear();
-
-            if (regionsCostByNodeIndex == null || poiIdsByCostColumn == null)
-                return;
-
-            for (int nodeIndex = 0; nodeIndex < regionsCostByNodeIndex.Length; nodeIndex++)
+        }
+        void BuildPointsLookup()
+        {
+            for (int i = 0; i < pointsOfInterest.Count; i++)
             {
-                Vector2Int gridPos = GetGridPositionFromIndex(nodeIndex);
-                float[] costs = regionsCostByNodeIndex[nodeIndex];
-                Dictionary<int, float> newCosts = new Dictionary<int, float>(poiIdsByCostColumn.Length);
-                regionsCostByNode[gridPos] = newCosts;
-
-                for (int i = 0; i < poiIdsByCostColumn.Length; i++)
+                PointOfInterest poi = pointsOfInterest[i];
+                if (poi == null || poi.t == null)
                 {
-                    int poiId = poiIdsByCostColumn[i];
-                    newCosts[poiId] = costs[i];
+                    Debug.LogError("Point of interest " + i + " has no transform");
+                    continue;
                 }
+
+                if (poi.id == 0)
+                    poi.id = poi.t.GetInstanceID();
+
+                poi.gridPos = grid.GetGridPosition(poi.t.position);
+                pointsById[poi.id] = poi;
+                pointsByPos[poi.gridPos] = poi;
             }
         }
-        void EnsureNearestNodeBuffers(int nodeCount)
+        void CalculateVoronoi()
         {
-            if (regionsByNodeIndex == null || regionsByNodeIndex.Length != nodeCount)
-                regionsByNodeIndex = new int[nodeCount];
+            grid.GetCurrentGridValues(out bool[] walkableByNode, out int[] weightByNode);
+            List<PoiSource> sources = GetCurrentPOIs();
 
-            if (nearestCostByNodeIndex == null || nearestCostByNodeIndex.Length != nodeCount)
-                nearestCostByNodeIndex = new int[nodeCount];
+            ReadTerrainStateVersions(out int snapshotVersion, out int snapshotPoiVersion);
+            Voronoi snapshot = Voronoi.BuildFullVoronoi(snapshotVersion, snapshotPoiVersion, sources, walkableByNode, weightByNode, neighbourIndicesByNode, grid);
+            SetActiveVoronoi(snapshot);
+        }
+        void UpdateVoronoi()
+        {
+            CalculateVoronoi();
+        }
+        List<PoiSource> GetCurrentPOIs()
+        {
+            List<PoiSource> sources = new List<PoiSource>();
 
-            for (int i = 0; i < nodeCount; i++)
+            lock (poiLock)
             {
-                regionsByNodeIndex[i] = -1;
-                nearestCostByNodeIndex[i] = int.MaxValue;
+                for (int i = 0; i < currentPOIs.Count; i++)
+                {
+                    PointOfInterest poi = currentPOIs[i];
+                    if (poi == null)
+                        continue;
+
+                    if (!grid.IsValidGridPosition(poi.gridPos))
+                        continue;
+
+                    sources.Add(new PoiSource(poi.id, grid.GetFlatNodeIndex(poi.gridPos)));
+                }
             }
+
+            return sources;
+        }
+        void SetActiveVoronoi(Voronoi snapshot)
+        {
+            activeVoronoi = snapshot;
+            regionsByNodeIndex = snapshot.regionsByNodeIndex;
+            nearestCostByNodeIndex = snapshot.nearestCostByNodeIndex;
+            SyncNearestRegionDictionary();
         }
         void SyncNearestRegionDictionary()
         {
@@ -578,75 +489,113 @@ namespace IA.Pathfinding.Voronoi
 
             for (int nodeIndex = 0; nodeIndex < regionsByNodeIndex.Length; nodeIndex++)
             {
-                Vector2Int pos = GetGridPositionFromIndex(nodeIndex);
+                Vector2Int pos = grid.GetGridPositionFromIndex(nodeIndex);
                 regionsByNode[pos] = regionsByNodeIndex[nodeIndex];
                 nearestCostByNode[pos] = nearestCostByNodeIndex[nodeIndex];
             }
         }
-        bool IsValidGridPosition(Vector2Int pos)
+        void InvalidateTerrainRecalculationForPoiChange()
         {
-            return pos.x >= 0 && pos.x < grid.gridSize.x && pos.y >= 0 && pos.y < grid.gridSize.y;
-        }
-        int GetFlatNodeIndex(Vector2Int gridPos)
-        {
-            if (!IsValidGridPosition(gridPos))
-                return -1;
-
-            return gridPos.x * grid.gridSize.y + gridPos.y;
-        }
-        Vector2Int GetGridPositionFromIndex(int nodeIndex)
-        {
-            int height = grid.gridSize.y;
-            int x = nodeIndex / height;
-            int y = nodeIndex % height;
-            return new Vector2Int(x, y);
-        }
-        int GetMovementCost(PathNode from, PathNode to)
-        {
-            int dst = Universal.FileManaging.Vec2Int.GetSqrDistance(from.gridPos, to.gridPos);
-            int travelCost = dst == 2 ? 14 : 10; //if diagonal, sqr distance will always be 2
-            return travelCost + to.weight;
-        }
-        float GetCost(PathNode start, PathNode end)
-        {
-            if (!TryFindPathCost(start, end, out int totalCost))
-                return -1;
-
-            return totalCost;
-        }
-        
-        //DEBUG
-        void SetGizmoColors()
-        {
-            if(colorsByRegion == null)
-                colorsByRegion = new Dictionary<int, Color>();
-            else 
-                colorsByRegion.Clear();
-
-            //If enough colors for each region, use one for each or less
-            if (currentPOIs.Count <= possibleRegionColors.Length)
+            lock (terrainStateLock)
             {
-                for (int i = 0; i < currentPOIs.Count; i++)
+                poiVersion++;
+                terrainRequestVersion++;
+                stagedTerrainVoronoi = null;
+            }
+        }
+        void ReadTerrainStateVersions(out int requestVersion, out int currentPoiVersion)
+        {
+            lock (terrainStateLock)
+            {
+                requestVersion = terrainRequestVersion;
+                currentPoiVersion = poiVersion;
+            }
+        }
+        ///Try get Voronoi from completed task
+        void HandleCompletedTerrainTask(Task<Voronoi> completedTask)
+        {
+            Voronoi result;
+            try
+            {
+                result = completedTask.GetAwaiter().GetResult();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Voronoi terrain recalculation failed: {ex.Message}");
+                return;
+            }
+
+            if (result == null)
+                return;
+
+            lock (terrainStateLock)
+            {
+                if (result.version < terrainRequestVersion)
+                    return;
+
+                if (result.poiVersion != poiVersion)
+                    return;
+
+                if (stagedTerrainVoronoi == null || result.version >= stagedTerrainVoronoi.version)
+                    stagedTerrainVoronoi = result;
+            }
+        }
+        void BuildRegionsCostDictionaryFromIndexBuffer()
+        {
+            if (regionsCostByNode == null)
+                regionsCostByNode = new Dictionary<Vector2Int, Dictionary<int, float>>();
+            else
+                regionsCostByNode.Clear();
+
+            if (regionsCostByNodeIndex == null || poiIdsByCostColumn == null)
+                return;
+
+            for (int nodeIndex = 0; nodeIndex < regionsCostByNodeIndex.Length; nodeIndex++)
+            {
+                Vector2Int gridPos = grid.GetGridPositionFromIndex(nodeIndex);
+                float[] costs = regionsCostByNodeIndex[nodeIndex];
+                Dictionary<int, float> newCosts = new Dictionary<int, float>(poiIdsByCostColumn.Length);
+                regionsCostByNode[gridPos] = newCosts;
+
+                for (int i = 0; i < poiIdsByCostColumn.Length; i++)
                 {
-                    colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[i]);
+                    int poiId = poiIdsByCostColumn[i];
+                    newCosts[poiId] = costs[i];
                 }
             }
-                
-            //If not enough colors, use random for the rest
+        }
+        void SetGizmoColors()
+        {
+            if (colorsByRegion == null)
+                colorsByRegion = new Dictionary<int, Color>();
             else
-            {
-                for (int i = 0; i < possibleRegionColors.Length; i++)
-                {
-                    colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[i]);
-                }
+                colorsByRegion.Clear();
 
-                for (int i = possibleRegionColors.Length; i < currentPOIs.Count; i++)
+            if (currentPOIs == null || currentPOIs.Count == 0)
+                return;
+
+            if (possibleRegionColors == null || possibleRegionColors.Length == 0)
+                return;
+
+            lock (poiLock)
+            {
+                if (currentPOIs.Count <= possibleRegionColors.Length)
                 {
-                    int rIndex = Random.Range(0, possibleRegionColors.Length);
-                    colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[rIndex]);
+                    for (int i = 0; i < currentPOIs.Count; i++)
+                        colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[i]);
+                }
+                else
+                {
+                    for (int i = 0; i < possibleRegionColors.Length; i++)
+                        colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[i]);
+
+                    for (int i = possibleRegionColors.Length; i < currentPOIs.Count; i++)
+                    {
+                        int rIndex = Random.Range(0, possibleRegionColors.Length);
+                        colorsByRegion.TryAdd(currentPOIs[i].id, possibleRegionColors[rIndex]);
+                    }
                 }
             }
         }
     }
 }
-

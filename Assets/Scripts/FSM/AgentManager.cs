@@ -70,8 +70,8 @@ namespace IA.FSM
             SpawnCaravan();
 
             mineCheckTimer = mineInUseCheckInterval - 1;
+            pathManager.OnVoronoiLayerCommitted += OnVoronoiLayerCommitted;
         }
-
         void Update()
         {
             float dt = Time.deltaTime;
@@ -102,6 +102,11 @@ namespace IA.FSM
                 CheckMinesInUse();
             }
         }
+        void OnDestroy()
+        {
+            if (pathManager != null)
+                pathManager.OnVoronoiLayerCommitted -= OnVoronoiLayerCommitted;
+        }
 
         //Methods
         public void SetEmergency()
@@ -119,6 +124,25 @@ namespace IA.FSM
                 if (isOnEmergency) lock (caravan) caravan.Emergency();
                 else lock (caravan) caravan.EmergencyOver();
             });
+        }
+
+        void OnVoronoiLayerCommitted(int layer)
+        {
+            if (layer == 0)
+            {
+                for (int i = 0; i < miners.Count; i++)
+                    lock (miners[i])
+                        miners[i].OnMapUpdated();
+
+                return;
+            }
+
+            if (layer == 1)
+            {
+                for (int i = 0; i < caravans.Count; i++)
+                    lock (caravans[i])
+                        caravans[i].OnMapUpdated();
+            }
         }
 
         public void SpawnMiner()

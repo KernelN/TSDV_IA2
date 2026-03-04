@@ -1,8 +1,32 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace IA.Pathfinding.Grid
 {
+    /// <summary>
+    /// Delta between old and new node data
+    /// </summary>
+    public struct NodeTerrainDelta
+    {
+        public int nodeIndex;
+        public Vector2Int gridPos;
+        public bool oldWalkable;
+        public bool newWalkable;
+        public int oldWeight;
+        public int newWeight;
+
+        public NodeTerrainDelta(int nodeIndex, Vector2Int gridPos, bool oldWalkable, bool newWalkable, int oldWeight, int newWeight)
+        {
+            this.nodeIndex = nodeIndex;
+            this.gridPos = gridPos;
+            this.oldWalkable = oldWalkable;
+            this.newWalkable = newWalkable;
+            this.oldWeight = oldWeight;
+            this.newWeight = newWeight;
+        }
+    }
+
     [System.Serializable]
     public class PathGrid
     {
@@ -23,18 +47,19 @@ namespace IA.Pathfinding.Grid
         public PathNode[,] grid { get; private set; }
         public Vector2Int gridSize { get; private set; }
         public float NodeDiameter { get { return nodeRadius * 2; } }
-        
+
         //Unity Methods
         public void Set(Transform gridTransform, Vector2 gridWorldSize, PathNode[,] savedGrid = null)
         {
             gridT = gridTransform;
             this.gridWorldSize = gridWorldSize;
-            
+
             Vector2Int gridSize = new Vector2Int();
             gridSize.x = Mathf.RoundToInt(gridWorldSize.x / NodeDiameter);
             gridSize.y = Mathf.RoundToInt(gridWorldSize.y / NodeDiameter);
             this.gridSize = gridSize;
 
+            terrainsMask = 0;
             terrainsDictionary = new Dictionary<int, int>();
             for (int i = 0; i < terrains.Length; i++)
             {
@@ -43,10 +68,10 @@ namespace IA.Pathfinding.Grid
 
                 //Add all terrains to the dictionary
                 int layerIndex = (int)Mathf.Log(terrains[i].mask.value, 2);
-                terrainsDictionary.Add(layerIndex, terrains[i].weight); 
+                terrainsDictionary.Add(layerIndex, terrains[i].weight);
             }
-            
-            if(savedGrid == null)
+
+            if (savedGrid == null)
                 CreateGrid();
             else
                 grid = savedGrid;
@@ -100,7 +125,7 @@ namespace IA.Pathfinding.Grid
             PathNode playerNode = null;
             if (player)
                 playerNode = NodeFromWorldPoint(player.position);
-            
+
             for (int x = 0; x < gridSize.x; x++)
             {
                 for (int y = 0; y < gridSize.y; y++)
@@ -119,22 +144,22 @@ namespace IA.Pathfinding.Grid
                 }
             }
         }
-        
+
         //Methods
         public PathNode NodeFromWorldPoint(Vector3 worldPos)
         {
             //pos + half size gives pos as if center was botLeft, / gridsize gives pos in grid in percentage
             float percentX = (worldPos.x + gridWorldSize.x / 2) / gridWorldSize.x;
             float percentY = (worldPos.z + gridWorldSize.y / 2) / gridWorldSize.y;
-            
+
             //Clamp to make sure we dont go out of bounds
             percentX = Mathf.Clamp01(percentX);
             percentY = Mathf.Clamp01(percentY);
-            
+
             //Get grid pos and round to int (to get index)
             int x = Mathf.RoundToInt((gridSize.x - 1) * percentX);
             int y = Mathf.RoundToInt((gridSize.y - 1) * percentY);
-            
+
             return grid[x, y];
         }
         public Vector2Int GetGridPosition(Vector3 worldPos)
@@ -142,16 +167,55 @@ namespace IA.Pathfinding.Grid
             //pos + half size gives pos as if center was botLeft, / gridsize gives pos in grid in percentage
             float percentX = (worldPos.x + gridWorldSize.x / 2) / gridWorldSize.x;
             float percentY = (worldPos.z + gridWorldSize.y / 2) / gridWorldSize.y;
-            
+
             //Clamp to make sure we dont go out of bounds
             percentX = Mathf.Clamp01(percentX);
             percentY = Mathf.Clamp01(percentY);
-            
+
             //Get grid pos and round to int (to get index)
             int x = Mathf.RoundToInt((gridSize.x - 1) * percentX);
             int y = Mathf.RoundToInt((gridSize.y - 1) * percentY);
-            
+
             return new Vector2Int(x, y);
+        }
+        /// <summary>
+        /// Get delta of all nodes that changed
+        /// </summary>
+        public List<NodeTerrainDelta> RefreshCells(HashSet<Vector2Int> cells)
+        {
+            List<NodeTerrainDelta> deltas = new List<NodeTerrainDelta>();
+            if (cells == null || grid == null)
+                return deltas;
+
+            HashSet<int> processed = new HashSet<int>();
+
+            //Do simple for each as EvaluateNode needs to do physic checks
+            foreach (Vector2Int cell in cells)
+            {
+                if (!IsValidGridPosition(cell))
+                    continue;
+
+                int nodeIndex = GetFlatNodeIndex(cell);
+                if (!processed.Add(nodeIndex))
+                    continue;
+
+                PathNode node = grid[cell.x, cell.y];
+                bool oldWalkable = node.walkable;
+                int oldWeight = node.weight;
+
+                bool newWalkable;
+                int newWeight;
+                EvaluateNode(cell, out newWalkable, out newWeight);
+
+                if (oldWalkable == newWalkable && oldWeight == newWeight)
+                    continue;
+
+                node.walkable = newWalkable;
+                node.weight = newWeight;
+                deltas.Add(new NodeTerrainDelta(nodeIndex, cell, oldWalkable, newWalkable, oldWeight, newWeight));
+            }
+
+            return deltas;
         }
         void CreateGrid()
         {
@@ -162,20 +226,20 @@ namespace IA.Pathfinding.Grid
             worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
 
             Ray terrainRay = new Ray(Vector3.zero, Vector3.down);
-            
+
             //Create nodes
             for (int i = 0; i < gridSize.x; i++)
             {
                 for (int j = 0; j < gridSize.y; j++)
                 {
                     Vector3 worldPoint = worldBotLeft; //start at bottom left
-                    
+
                     //add number of nodes in x and add half of current one
                     worldPoint += Vector3.right * (i * NodeDiameter + nodeRadius);
-                    
+
                     //add number of nodes in y and add half of current one
                     worldPoint += Vector3.forward * (j * NodeDiameter + nodeRadius);
-                    
+
                     //Check if node is walkable
                     bool walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, unwalkableMask));
 
@@ -191,12 +255,12 @@ namespace IA.Pathfinding.Grid
                     terrainRay.origin = worldPoint + Vector3.up * rayHeightOffset;
                     if (Physics.Raycast(terrainRay, out RaycastHit hit, 1000, terrainsMask))
                         terrainsDictionary.TryGetValue(hit.collider.gameObject.layer, out mPenalty);
-                    
+
                     //Create node
                     grid[i, j] = new PathNode(walkable, worldPoint, new Vector2Int(i, j), mPenalty);
                 }
             }
-            
+
             //Set neighbours
             for (int x = 0; x < gridSize.x; x++)
             {
@@ -209,13 +273,13 @@ namespace IA.Pathfinding.Grid
         List<PathNode> GetNeighbours(PathNode node)
         {
             List<PathNode> neighbours = new List<PathNode>();
-            
+
             for (int x = -1; x <= 1; x++)
             {
                 for (int y = -1; y <= 1; y++)
                 {
                     if (x == 0 && y == 0) continue;
-                    
+
                     int checkX = node.gridPos.x + x;
                     if(checkX < 0 || checkX >= gridSize.x)
                         continue;
@@ -227,8 +291,84 @@ namespace IA.Pathfinding.Grid
                     neighbours.Add(grid[checkX, checkY]);
                 }
             }
-            
+
             return neighbours;
+        }
+        internal bool IsValidGridPosition(Vector2Int pos)
+        {
+            return pos.x >= 0 && pos.x < gridSize.x && pos.y >= 0 && pos.y < gridSize.y;
+        }
+        internal int GetFlatNodeIndex(Vector2Int gridPos)
+        {
+            if (!IsValidGridPosition(gridPos))
+                return -1;
+
+            return gridPos.x * gridSize.y + gridPos.y;
+        }
+        internal Vector2Int GetGridPositionFromIndex(int nodeIndex)
+        {
+            int ySize = gridSize.y;
+            int x = nodeIndex / ySize;
+            int y = nodeIndex % ySize;
+            return new Vector2Int(x, y);
+        }
+        internal int[][] BuildNeighbourIndicesByNode()
+        {
+            int nodeCount = gridSize.x * gridSize.y;
+            int[][] neighbourIndicesByNode = new int[nodeCount][];
+
+            for (int x = 0; x < gridSize.x; x++)
+            {
+                for (int y = 0; y < gridSize.y; y++)
+                {
+                    int nodeIndex = GetFlatNodeIndex(new Vector2Int(x, y));
+                    List<PathNode> neighbours = grid[x, y].neighbours;
+                    int[] neighbourIndices = new int[neighbours.Count];
+                    for (int i = 0; i < neighbours.Count; i++)
+                        neighbourIndices[i] = GetFlatNodeIndex(neighbours[i].gridPos);
+
+                    neighbourIndicesByNode[nodeIndex] = neighbourIndices;
+                }
+            }
+
+            return neighbourIndicesByNode;
+        }
+        internal void GetCurrentGridValues(out bool[] walkableByNode, out int[] weightByNode)
+        {
+            int totalNodes = gridSize.x * gridSize.y;
+            bool[] walkables = new bool[totalNodes];
+            int[] weights = new int[totalNodes];
+
+            Parallel.For(0, totalNodes, i =>
+            {
+                Vector2Int gridPos = GetGridPositionFromIndex(i);
+                PathNode node = grid[gridPos.x, gridPos.y];
+                walkables[i] = node.walkable;
+                weights[i] = node.weight;
+            });
+
+            walkableByNode = walkables;
+            weightByNode = weights;
+        }
+        /// <summary>
+        /// Get node data based on the world
+        /// </summary>
+        void EvaluateNode(Vector2Int gridPos, out bool walkable, out int terrainCost)
+        {
+            PathNode node = grid[gridPos.x, gridPos.y];
+            Vector3 worldPoint = node.worldPos;
+
+            //Check for walkable
+            walkable = !(Physics.CheckSphere(worldPoint, nodeRadius, unwalkableMask));
+            terrainCost = 0;
+
+            if (!walkable)
+                return;
+
+            //Check for terrain cost
+            Ray terrainRay = new Ray(worldPoint + Vector3.up * 50, Vector3.down);
+            if (Physics.Raycast(terrainRay, out RaycastHit hit, 100, terrainsMask))
+                terrainsDictionary.TryGetValue(hit.collider.gameObject.layer, out terrainCost);
         }
     }
 }
