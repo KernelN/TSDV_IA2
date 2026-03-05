@@ -431,6 +431,13 @@ namespace IA.Pathfinding
         {
             return grids[index].NodeDiameter;
         }
+        public LayerMask GetUnwalkableMask(int index)
+        {
+            if (index < 0 || index >= grids.Length)
+                return 0;
+
+            return grids[index].unwalkableMask;
+        }
         public Vector2Int GetGridPos(Vector3 worldPos, int index)
         {
             return grids[index].NodeFromWorldPoint(worldPos).gridPos;
@@ -459,4 +466,5 @@ namespace IA.Pathfinding
         }
     }
 }
+
 

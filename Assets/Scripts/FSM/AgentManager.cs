@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using IA.FSM.Flocking;
 using UnityEngine;
 
 namespace IA.FSM
@@ -31,6 +32,10 @@ namespace IA.FSM
         [Header("Caravan Settings")]
         [SerializeField] Caravan.ACaravan caravanTemplate;
         [SerializeField] GameObject caravanPrefab;
+        [Header("Flocking Settings")]
+        [SerializeField] AgentFlockingSettings minerFlockingSettings = AgentFlockingSettings.CreateDefaultMiner();
+        [SerializeField] AgentFlockingSettings caravanFlockingSettings = AgentFlockingSettings.CreateDefaultCaravan();
+        [SerializeField, Min(8)] int flockingObstacleBufferSize = 64;
 
         //[Header("Runtime Values")]
         List<Miner.AMiner> miners;
@@ -39,6 +44,13 @@ namespace IA.FSM
         float mineCheckTimer;
         Dictionary<int, Mine> minesByID;
         bool isOnEmergency;
+        Collider[] minerObstacleBuffer;
+        Collider[] caravanObstacleBuffer;
+
+        readonly List<AgentFlockingSnapshot> minerFlockingSnapshots = new List<AgentFlockingSnapshot>();
+        readonly List<AgentFlockingSnapshot> caravanFlockingSnapshots = new List<AgentFlockingSnapshot>();
+        readonly List<Vector3> minerFlockingOutput = new List<Vector3>();
+        readonly List<Vector3> caravanFlockingOutput = new List<Vector3>();
 
         //Unity Events
         void Start()
@@ -66,6 +78,8 @@ namespace IA.FSM
                 minesByID.TryAdd(mine.id, mine);
             }
 
+            InitializeFlocking();
+
             SpawnMiner();
             SpawnCaravan();
 
@@ -84,6 +98,9 @@ namespace IA.FSM
             {
                 lock (caravan) caravan.UpdateFSM(dt);
             });
+
+            ApplyFlockingToMiners();
+            ApplyFlockingToCaravans();
 
             for (int i = 0; i < miners.Count; i++)
                 miners[i].UpdateTransform();
@@ -109,6 +126,104 @@ namespace IA.FSM
         }
 
         //Methods
+        void InitializeFlocking()
+        {
+            minerFlockingSettings = EnsureFlockingDefaults(minerFlockingSettings, AgentFlockingSettings.CreateDefaultMiner());
+            caravanFlockingSettings = EnsureFlockingDefaults(caravanFlockingSettings, AgentFlockingSettings.CreateDefaultCaravan());
+
+            int obstacleBufferSize = Mathf.Max(8, flockingObstacleBufferSize);
+            minerObstacleBuffer = new Collider[obstacleBufferSize];
+            caravanObstacleBuffer = new Collider[obstacleBufferSize];
+        }
+
+        static AgentFlockingSettings EnsureFlockingDefaults(AgentFlockingSettings settings, AgentFlockingSettings defaults)
+        {
+            bool hasCustomValue =
+                settings.alignmentDist > 0f || settings.cohesionDist > 0f || settings.separationDist > 0f || settings.obstacleDist > 0f ||
+                settings.alignmentMod != 0f || settings.cohesionMod != 0f || settings.separationMod != 0f || settings.obstacleMod != 0f ||
+                settings.minSpacing > 0f || settings.maxSteer > 0f || settings.spatialHashCellSize > 0f;
+
+            return hasCustomValue ? settings : defaults;
+        }
+
+        void ApplyFlockingToMiners()
+        {
+            if (pathManager == null || miners.Count <= 0)
+                return;
+
+            if (minerObstacleBuffer == null || minerObstacleBuffer.Length <= 0)
+                minerObstacleBuffer = new Collider[Mathf.Max(8, flockingObstacleBufferSize)];
+
+            LayerMask obstacleMask = pathManager.GetUnwalkableMask(0);
+            minerFlockingSnapshots.Clear();
+            for (int i = 0; i < miners.Count; i++)
+            {
+                lock (miners[i])
+                {
+                    minerFlockingSnapshots.Add(new AgentFlockingSnapshot(
+                        miners[i].CurrentPosition,
+                        miners[i].PlannedPosition,
+                        miners[i].HasMovementIntent()));
+                }
+            }
+
+            AgentFlockingSolver.Apply(
+                minerFlockingSnapshots,
+                minerFlockingSettings,
+                obstacleMask,
+                minerObstacleBuffer,
+                minerFlockingOutput);
+
+            int applyCount = Mathf.Min(miners.Count, minerFlockingOutput.Count);
+            for (int i = 0; i < applyCount; i++)
+            {
+                if (!minerFlockingSnapshots[i].hasMovementIntent)
+                    continue;
+
+                lock (miners[i])
+                    miners[i].OverridePlannedPosition(minerFlockingOutput[i]);
+            }
+        }
+
+        void ApplyFlockingToCaravans()
+        {
+            if (pathManager == null || caravans.Count <= 0)
+                return;
+
+            if (caravanObstacleBuffer == null || caravanObstacleBuffer.Length <= 0)
+                caravanObstacleBuffer = new Collider[Mathf.Max(8, flockingObstacleBufferSize)];
+
+            LayerMask obstacleMask = pathManager.GetUnwalkableMask(1);
+            caravanFlockingSnapshots.Clear();
+            for (int i = 0; i < caravans.Count; i++)
+            {
+                lock (caravans[i])
+                {
+                    caravanFlockingSnapshots.Add(new AgentFlockingSnapshot(
+                        caravans[i].CurrentPosition,
+                        caravans[i].PlannedPosition,
+                        caravans[i].HasMovementIntent()));
+                }
+            }
+
+            AgentFlockingSolver.Apply(
+                caravanFlockingSnapshots,
+                caravanFlockingSettings,
+                obstacleMask,
+                caravanObstacleBuffer,
+                caravanFlockingOutput);
+
+            int applyCount = Mathf.Min(caravans.Count, caravanFlockingOutput.Count);
+            for (int i = 0; i < applyCount; i++)
+            {
+                if (!caravanFlockingSnapshots[i].hasMovementIntent)
+                    continue;
+
+                lock (caravans[i])
+                    caravans[i].OverridePlannedPosition(caravanFlockingOutput[i]);
+            }
+        }
+
         public void SetEmergency()
         {
             isOnEmergency = !isOnEmergency;
@@ -290,3 +405,4 @@ namespace IA.FSM
         }
     }
 }
+

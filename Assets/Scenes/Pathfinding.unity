@@ -227,11 +227,11 @@ MonoBehaviour:
   useSavedData: 0
   saveData: 0
   minePrefab: {fileID: 3390472241950091475, guid: 7cc5e9c857290fc47af95fddb553c4d3, type: 3}
-  mineCount: 6
+  mineCount: 7
   mineSettings:
-    minerals: 30
+    minerals: 60
     initialFood: 15
-  terrainRecalcDebounceSeconds: 0.1
+  terrainRecalcMaxDuration: 0.1
   gizmosIndex: 0
 --- !u!1 &182339971
 GameObject:
@@ -3301,6 +3301,31 @@ MonoBehaviour:
     loadDuration: 5
     depositDuration: 5
   caravanPrefab: {fileID: 6154075679692172164, guid: 9d7de6ab71fc7a74cbbb5fbf24921c6b, type: 3}
+  minerFlockingSettings:
+    alignmentDist: 1.5
+    cohesionDist: 1.75
+    separationDist: 1.2
+    obstacleDist: 1
+    alignmentMod: 0.7
+    cohesionMod: 0.5
+    separationMod: 1.75
+    obstacleMod: 1.25
+    minSpacing: 0.45
+    maxSteer: 0.75
+    spatialHashCellSize: 1.5
+  caravanFlockingSettings:
+    alignmentDist: 2.25
+    cohesionDist: 2.5
+    separationDist: 1.6
+    obstacleDist: 1.5
+    alignmentMod: 0.65
+    cohesionMod: 0.45
+    separationMod: 1.85
+    obstacleMod: 1.35
+    minSpacing: 0.75
+    maxSteer: 0.65
+    spatialHashCellSize: 2
+  flockingObstacleBufferSize: 64
 --- !u!4 &2142637359
 Transform:
   m_ObjectHideFlags: 0

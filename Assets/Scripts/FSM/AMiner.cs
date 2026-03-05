@@ -14,10 +14,10 @@ namespace IA.FSM.Miner
         Deposit,
         GoToSafePlace,
         Hide,
-        
+
         _count
     }
-    
+
     public enum Flags
     {
         OnNearTarget,
@@ -28,12 +28,12 @@ namespace IA.FSM.Miner
         OnAte,
         OnMineEmpty,
         OnEmergency,
-        
+
         OnMapUpdated,
-        
+
         _count
     }
-    
+
     [Serializable]
     public class AMiner
     {
@@ -49,19 +49,20 @@ namespace IA.FSM.Miner
         float deltaTime;
         Vector3 pos;
         Vector3 nextPos;
-        
+
         public Vector2Int minePos { get; private set; }
         public bool hasMine { get; private set; }
 
-        
+
         //Unity Methods
-        public void Set(Pathfinding.PathManager pathManager, int pathfinderIndex, 
+        public void Set(Pathfinding.PathManager pathManager, int pathfinderIndex,
                     Transform safePlace, Transform depositPlace, Transform transform,
                         Func<Vector2Int, bool> TryMine, Func<Vector2Int, bool> TryEat)
         {
             this.transform = transform;
             pos = transform.position;
-            
+            nextPos = pos;
+
             fsm = new FSM((int)States._count, (int)Flags._count);
 
             fsm.SetRelation((int)States.Idle, (int)Flags.OnMapUpdated, (int)States.GoToMine);
@@ -90,32 +91,32 @@ namespace IA.FSM.Miner
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
             //fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
 
-            Action<Vector3> OnGotNewPos = newPos => 
+            Action<Vector3> OnGotNewPos = newPos =>
                 nextPos = newPos;
             Action<Vector2Int> GetMineGridPos = gridPos =>
             { minePos = gridPos; hasMine = true; };
             float nodeDiamater = pathManager.GetNodeDiameter(pathfinderIndex);
             Vector3 safePos = safePlace.position;
             Vector3 depositPos = depositPlace.position;
-            
+
             fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToDeposit,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
-                () => new object[] 
+                () => new object[]
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
                         (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, depositPos }
                 );
             fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToSafePlace,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
-                () => new object[] 
+                () => new object[]
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
                         (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed, safePos }
                 );
             fsm.AddState<IA.FSM.States.FollowPathState>(
                 (int)States.GoToMine,
                 () => new object[] { deltaTime, pos, OnGotNewPos },
-                () => new object[] 
+                () => new object[]
                 { pathManager, pathfinderIndex, pos, moveSpeed, nodeDiamater,
                     (int)Flags.OnNearTarget, (int)Flags.OnMoveFailed },
                 () => new object[] { GetMineGridPos }
@@ -145,8 +146,21 @@ namespace IA.FSM.Miner
             pos = nextPos;
             transform.position = pos;
         }
-        
+
         //Methods
+        public Vector3 CurrentPosition => pos;
+        public Vector3 PlannedPosition => nextPos;
+
+        public bool HasMovementIntent(float sqrDistanceThreshold = 0.000001f)
+        {
+            return (nextPos - pos).sqrMagnitude > sqrDistanceThreshold;
+        }
+
+        public void OverridePlannedPosition(Vector3 newPos)
+        {
+            nextPos = newPos;
+        }
+
         public void Emergency()
         {
             //Save the right state before emergency, so it doesn't do actions in the middle of nowhere
@@ -162,7 +176,7 @@ namespace IA.FSM.Miner
                     break;
                 default:
                     lastStateBeforeEmergency = (States)fsm.currentStateIndex;
-                    break;                    
+                    break;
             }
             fsm.SetFlag((int)Flags.OnEmergency);
         }
