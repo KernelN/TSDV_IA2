@@ -8,23 +8,27 @@ namespace IA.Pathfinding.AStar
     /// Based on Lague's A* Pathfinding:
     /// https://youtube.com/playlist?list=PLFt_AvWsXl0cq5Umv3pMC9SPnKjfp9eGW&amp;si=OmsMlMnHXmTXOmU1
     /// https://github.com/SebLague/Pathfinding
-    ///
-    /// Thread-safety guarantee:
-    /// Path search state (costs, parent link, open/closed membership) is stored per-call in NodeRecord
-    /// dictionaries keyed by grid position. PathNode instances are treated as read-only map data by the
-    /// search itself, allowing concurrent FindPath calls that share the same grid topology.
     /// </summary>
     [System.Serializable]
     public class AStarPathfinder
     {
         protected struct NodeRecord
         {
+            /// <summary>
+            /// Cumulative cost from source node
+            /// </summary>
             public int gCost;
+            /// <summary>
+            /// Manhattan* cost to target node
+            /// </summary>
             public int hCost;
             public int parentIndex;
             public bool isOpen;
             public bool isClosed;
 
+            /// <summary>
+            /// Combination of both g & h (aprox cost from source to target, gets more precise the closer we get)s
+            /// </summary>
             public int FCost => gCost + hCost;
         }
 
@@ -56,7 +60,7 @@ namespace IA.Pathfinding.AStar
             if(startNode == targetNode)
                 return new List<PathNode>{startNode};
 
-            if (!TrySearch(startNode, targetNode, out Dictionary<Vector2Int, NodeRecord> records, out _))
+            if (!TryFindPath(startNode, targetNode, out Dictionary<Vector2Int, NodeRecord> records, out _))
                 return null;
 
             return RetracePath(startNode, targetNode, records);
@@ -70,10 +74,10 @@ namespace IA.Pathfinding.AStar
                 return true;
             }
 
-            return TrySearch(startNode, targetNode, out _, out totalCost);
+            return TryFindPath(startNode, targetNode, out _, out totalCost);
         }
 
-        bool TrySearch(PathNode startNode, PathNode targetNode, out Dictionary<Vector2Int, NodeRecord> records, out int totalCost)
+        bool TryFindPath(PathNode startNode, PathNode targetNode, out Dictionary<Vector2Int, NodeRecord> records, out int totalCost)
         {
             records = new Dictionary<Vector2Int, NodeRecord>();
             totalCost = -1;
@@ -171,6 +175,9 @@ namespace IA.Pathfinding.AStar
             return path;
         }
 
+        /// <summary>
+        /// Returns manhattan distance between nodes with A* mod
+        /// </summary>
         int GetDistance(PathNode nodeA, PathNode nodeB)
         {
             int dstX = Mathf.Abs(nodeA.gridPos.x - nodeB.gridPos.x);
