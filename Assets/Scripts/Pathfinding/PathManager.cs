@@ -292,7 +292,7 @@ namespace IA.Pathfinding
             }
 
             for (int i = 0; i < grids.Length; i++)
-                if (!IsCompatibleWithCurrentConfig(layerData[i], grids[i]))
+                if (!IsSaveCompatibleWithCurrent(layerData[i], grids[i]))
                 {
                     Debug.LogWarning("Saved pathfinding/mine data is incompatible with current settings. Recalculating from scratch.");
                     return false;
@@ -300,7 +300,7 @@ namespace IA.Pathfinding
 
             return true;
         }
-        bool IsCompatibleWithCurrentConfig(LayerData savedData, Grid.PathGrid currentGrid)
+        bool IsSaveCompatibleWithCurrent(LayerData savedData, Grid.PathGrid currentGrid)
         {
             int expectedCellCount = GetExpectedCellCount(currentGrid);
             int expectedGridHeight = GetExpectedGridHeight(currentGrid);
