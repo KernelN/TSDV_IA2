@@ -61,23 +61,7 @@ namespace IA.FSM
             mines = new List<Mine>();
 
             minesByID = new Dictionary<int, Mine>();
-            Pathfinding.MineSettings mineSettings = pathManager.GetMineSettings();
-            List<Pathfinding.PathManager.Mine> generatedMines = pathManager.GetRuntimeMines();
-            for (int i = 0; i < generatedMines.Count; i++)
-            {
-                Mine mine = new Mine
-                {
-                    t = generatedMines[i].transform,
-                    gridPos = generatedMines[i].gridPos,
-                    id = generatedMines[i].id,
-                    minerals = mineSettings.minerals,
-                    food = mineSettings.initialFood,
-                    isActive = true
-                };
-
-                mines.Add(mine);
-                minesByID.TryAdd(mine.id, mine);
-            }
+            GetMap();
 
             InitializeFlocking();
 
@@ -86,6 +70,7 @@ namespace IA.FSM
 
             mineCheckTimer = mineInUseCheckInterval - 1;
             pathManager.OnVoronoiLayerCommitted += OnVoronoiLayerCommitted;
+            pathManager.OnWholeMapRegen += GetMap;
         }
         void Update()
         {
@@ -383,6 +368,26 @@ namespace IA.FSM
         }
 
         //Event Receivers
+        void GetMap()
+        {
+            Pathfinding.MineSettings mineSettings = pathManager.GetMineSettings();
+            List<Pathfinding.PathManager.Mine> generatedMines = pathManager.GetRuntimeMines();
+            for (int i = 0; i < generatedMines.Count; i++)
+            {
+                Mine mine = new Mine
+                {
+                    t = generatedMines[i].transform,
+                    gridPos = generatedMines[i].gridPos,
+                    id = generatedMines[i].id,
+                    minerals = mineSettings.minerals,
+                    food = mineSettings.initialFood,
+                    isActive = true
+                };
+
+                mines.Add(mine);
+                minesByID.TryAdd(mine.id, mine);
+            }
+        }
         void OnFoodDeposited(Vector2Int gridPos)
         {
             int mineID = pathManager.GetPathfinder(1).GetPointOfInterestID(gridPos);

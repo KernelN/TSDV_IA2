@@ -142,12 +142,13 @@ namespace IA.Pathfinding
         LayerData[] layerData;
         bool shouldLoadSavedData;
         List<Mine> mines = new List<Mine>();
-        readonly Dictionary<int, HashSet<Vector2Int>> queuedTerrainChangesByLayer = new Dictionary<int, HashSet<Vector2Int>>();
-
+        Dictionary<int, HashSet<Vector2Int>> queuedTerrainChangesByLayer = new Dictionary<int, HashSet<Vector2Int>>();
+        bool generationFailed;
         [Header("DEBUG")]
         [SerializeField, Min(0)] int gizmosIndex;
 
-        public event Action<int> OnVoronoiLayerCommitted;
+        public System.Action<int> OnVoronoiLayerCommitted;
+        public System.Action OnWholeMapRegen;
 
         //Unity Events
         void Awake()
@@ -231,23 +232,28 @@ namespace IA.Pathfinding
         /// </summary>
         public void QueueAllTerrainCellsForRescan()
         {
-            for (int layer = 0; layer < grids.Length; layer++)
-            {
-                //Make sure all layers have a queue
-                if (!queuedTerrainChangesByLayer.TryGetValue(layer, out HashSet<Vector2Int> queuedCells))
-                {
-                    queuedCells = new HashSet<Vector2Int>();
-                    queuedTerrainChangesByLayer[layer] = queuedCells;
-                }
+            for (int i = 0; i < grids.Length; i++) 
+                grids[i].Set(gridTransform, gridWorldSize);
 
-                //Add all cells to queue
-                for (int x = 0; x < grids[layer].gridSize.x; x++)
-                for (int y = 0; y < grids[layer].gridSize.y; y++)
-                    queuedCells.Add(new Vector2Int(x, y));
+            BuildMines(false);
+
+            for (int i = 0; i < pathfinders.Length; i++)
+            {
+                pathfinders[i].SetPointsOfInterest(BuildPointsOfInterestFromMines());
+                pathfinders[i].Set(grids[i]);
             }
         }
         public void SetCellsForRecalculation()
         {
+            if (generationFailed)
+            {
+                for (int i = 0; i < grids.Length; i++)
+                    grids[i].Set(gridTransform, gridWorldSize);
+                generationFailed = false;
+                OnWholeMapRegen?.Invoke();
+                return;
+            }
+            
             if (queuedTerrainChangesByLayer.Count <= 0)
                 return;
 
@@ -286,13 +292,11 @@ namespace IA.Pathfinding
             }
 
             for (int i = 0; i < grids.Length; i++)
-            {
                 if (!IsCompatibleWithCurrentConfig(layerData[i], grids[i]))
                 {
                     Debug.LogWarning("Saved pathfinding/mine data is incompatible with current settings. Recalculating from scratch.");
                     return false;
                 }
-            }
 
             return true;
         }
@@ -345,6 +349,7 @@ namespace IA.Pathfinding
             if (validPositions.Count == 0)
             {
                 Debug.LogWarning("No walkable cells available for mine generation.");
+                generationFailed = true;
                 return;
             }
 

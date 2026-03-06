@@ -6,6 +6,7 @@ namespace IA.FSM.UI
     {
         [SerializeField] Pathfinding.PathManager controller;
         
+        [ContextMenu("Refresh Terrain From Colliders")]
         public void RefreshTerrainFromColliders()
         {
             if (controller == null) return;
