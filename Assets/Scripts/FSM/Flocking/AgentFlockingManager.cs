@@ -127,11 +127,11 @@ namespace IA.FSM.Flocking
                 Vector2 obstacle = Obstacle(agent.currentPos, settings, obstacleMask, obstacleBuffer);
 
                 Vector2 ACS =
-                    direction +
-                    alignment * settings.alignmentMod +
-                    cohesion * settings.cohesionMod +
-                    separation * settings.separationMod +
-                    obstacle * settings.obstacleMod;
+                    direction + //Direction to target, then modify direction towards...
+                    alignment * settings.alignmentMod + //...avg speed of all neighbours
+                    cohesion * settings.cohesionMod + //...avg center of all neighbours
+                    separation * settings.separationMod + //...opposite dir to avg center of all neighbours
+                    obstacle * settings.obstacleMod; //...opposite dir to avg center of all close obstacles
 
                 Vector2 finalDirection = ApplySteering(direction, ACS, settings.maxSteer);
 
@@ -243,15 +243,7 @@ namespace IA.FSM.Flocking
 
                 float distance = Mathf.Sqrt(Mathf.Max(nearby.sqrDistance, SqrEpsilon));
                 Vector2 away;
-                if (distance <= SqrEpsilon)
-                {
-                    away = GetDeterministicDirection(sourceAgentIndex, nearby.index);
-                    distance = settings.minSpacing;
-                }
-                else
-                {
-                    away = -nearby.offset / distance;
-                }
+                away = -nearby.offset / distance;
 
                 float safeDistance = Mathf.Max(distance, settings.minSpacing);
                 float weight = 1f / safeDistance;
@@ -451,13 +443,6 @@ namespace IA.FSM.Flocking
         static Vector2 ToXZ(Vector3 v)
         {
             return new Vector2(v.x, v.z);
-        }
-
-        static Vector2 GetDeterministicDirection(int sourceIndex, int neighbourIndex)
-        {
-            int hash = (sourceIndex + 1) * 73856093 ^ (neighbourIndex + 1) * 19349663;
-            float angle = (hash & 1023) / 1023f * (Mathf.PI * 2f);
-            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
         }
     }
 }
