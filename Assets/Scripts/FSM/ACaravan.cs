@@ -25,6 +25,7 @@ namespace IA.FSM.Caravan
         OnInventoryEmpty,
         OnInventoryFull,
         OnEmergency,
+        OnMineEmpty,
 
         OnMapUpdated,
 
@@ -46,6 +47,7 @@ namespace IA.FSM.Caravan
         Vector3 pos;
         Vector3 nextPos;
         Vector2Int minePos;
+        bool hasMineTarget;
 
         public Action<Vector2Int> onDepositSuccess;
 
@@ -73,9 +75,11 @@ namespace IA.FSM.Caravan
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.Idle);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMapUpdated, (int)States.GoToDeposit);
+            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMineEmpty, (int)States.GoToDeposit);
 
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToSource);
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            fsm.SetRelation((int)States.Deposit, (int)Flags.OnMineEmpty, (int)States.GoToDeposit);
 
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
@@ -84,7 +88,11 @@ namespace IA.FSM.Caravan
             Action<Vector3> OnGotNewPos =
                 newPos => nextPos = newPos;
             Action<Vector2Int> GetMineGridPos =
-                gridPos => minePos = gridPos;
+                gridPos =>
+                {
+                    minePos = gridPos;
+                    hasMineTarget = true;
+                };
             Action OnDepositSuccess =
                 () => onDepositSuccess?.Invoke(minePos);
             float nodeDiamater = pathManager.GetNodeDiameter(pathfinderIndex);
@@ -179,6 +187,12 @@ namespace IA.FSM.Caravan
         public void OnNoMoreMines()
         {
             fsm.SetCurrentStateForced((int)States.Idle);
+        }
+        public void OnMineEmpty(Vector2Int emptyMinePos)
+        {
+            if (!hasMineTarget) return;
+            if (emptyMinePos != minePos) return;
+            fsm.SetFlag((int)Flags.OnMineEmpty);
         }
     }
 }

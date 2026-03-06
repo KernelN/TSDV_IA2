@@ -3289,7 +3289,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   pathManager: {fileID: 139318368}
   urbanCenter: {fileID: 182339972}
-  mineInUseCheckInterval: 3
+  mineInUseCheckInterval: 0.25
   minerTemplate:
     moveSpeed: 5
     mineInterval: 0.25

@@ -320,6 +320,9 @@ namespace IA.FSM
                     for (int i = 0; i < miners.Count; i++)
                         lock (miners[i])
                             miners[i].OnMineEmpty(minePos);
+                    for (int i = 0; i < caravans.Count; i++)
+                        lock (caravans[i])
+                            caravans[i].OnMineEmpty(minePos);
 
                     if (minesByID.Count <= 0)
                     {
@@ -398,11 +401,24 @@ namespace IA.FSM
             int mineID = pathManager.GetPathfinder(1).GetPointOfInterestID(gridPos);
             if (mineID < 0) return;
 
-            if (!minesByID.TryGetValue(mineID, out Mine mine)) return;
+            Mine mine;
+            lock (minesByID)
+            {
+                if (!minesByID.TryGetValue(mineID, out mine))
+                    return;
+            }
 
             lock (mine)
+            {
+                if (!mine.isActive)
+                    return;
+
                 mine.food += 10; //hardcoded food amount
+            }
         }
     }
 }
+
+
+
 
