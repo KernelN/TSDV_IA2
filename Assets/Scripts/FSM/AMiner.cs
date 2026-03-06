@@ -49,6 +49,7 @@ namespace IA.FSM.Miner
         float deltaTime;
         Vector3 pos;
         Vector3 nextPos;
+        int consecutiveFailedFlags;
 
         public Vector2Int minePos { get; private set; }
         public bool hasMine { get; private set; }
@@ -82,14 +83,14 @@ namespace IA.FSM.Miner
             fsm.SetRelation((int)States.Eat, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnNearTarget, (int)States.Deposit);
-            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.GoToDeposit);
+            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.Idle);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToMine);
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
-            //fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
+            fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
 
             Action<Vector3> OnGotNewPos = newPos =>
                 nextPos = newPos;
