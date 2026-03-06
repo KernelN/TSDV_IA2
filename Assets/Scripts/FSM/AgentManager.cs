@@ -33,9 +33,10 @@ namespace IA.FSM
         [SerializeField] Caravan.ACaravan caravanTemplate;
         [SerializeField] GameObject caravanPrefab;
         [Header("Flocking Settings")]
-        [SerializeField] AgentFlockingSettings minerFlockingSettings = AgentFlockingSettings.CreateDefaultMiner();
-        [SerializeField] AgentFlockingSettings caravanFlockingSettings = AgentFlockingSettings.CreateDefaultCaravan();
-        [SerializeField, Min(8)] int flockingObstacleBufferSize = 64;
+        [SerializeField] AgentFlockingSettings minerFlockingSettings;
+        [SerializeField] AgentFlockingSettings caravanFlockingSettings;
+        [Tooltip("Physics overlap results array size")]
+        [SerializeField, Min(1)] int flockingObstacleBufferSize = 16;
 
         //[Header("Runtime Values")]
         List<Miner.AMiner> miners;
@@ -47,10 +48,10 @@ namespace IA.FSM
         Collider[] minerObstacleBuffer;
         Collider[] caravanObstacleBuffer;
 
-        readonly List<AgentFlockingSnapshot> minerFlockingSnapshots = new List<AgentFlockingSnapshot>();
-        readonly List<AgentFlockingSnapshot> caravanFlockingSnapshots = new List<AgentFlockingSnapshot>();
-        readonly List<Vector3> minerFlockingOutput = new List<Vector3>();
-        readonly List<Vector3> caravanFlockingOutput = new List<Vector3>();
+        List<AgentFlockingSnapshot> minerFlockingSnapshots = new List<AgentFlockingSnapshot>();
+        List<AgentFlockingSnapshot> caravanFlockingSnapshots = new List<AgentFlockingSnapshot>();
+        List<Vector3> minerFlockingOutput = new List<Vector3>();
+        List<Vector3> caravanFlockingOutput = new List<Vector3>();
 
         //Unity Events
         void Start()
@@ -128,22 +129,8 @@ namespace IA.FSM
         //Methods
         void InitializeFlocking()
         {
-            minerFlockingSettings = EnsureFlockingDefaults(minerFlockingSettings, AgentFlockingSettings.CreateDefaultMiner());
-            caravanFlockingSettings = EnsureFlockingDefaults(caravanFlockingSettings, AgentFlockingSettings.CreateDefaultCaravan());
-
-            int obstacleBufferSize = Mathf.Max(8, flockingObstacleBufferSize);
-            minerObstacleBuffer = new Collider[obstacleBufferSize];
-            caravanObstacleBuffer = new Collider[obstacleBufferSize];
-        }
-
-        static AgentFlockingSettings EnsureFlockingDefaults(AgentFlockingSettings settings, AgentFlockingSettings defaults)
-        {
-            bool hasCustomValue =
-                settings.alignmentDist > 0f || settings.cohesionDist > 0f || settings.separationDist > 0f || settings.obstacleDist > 0f ||
-                settings.alignmentMod != 0f || settings.cohesionMod != 0f || settings.separationMod != 0f || settings.obstacleMod != 0f ||
-                settings.minSpacing > 0f || settings.maxSteer > 0f || settings.spatialHashCellSize > 0f;
-
-            return hasCustomValue ? settings : defaults;
+            minerObstacleBuffer = new Collider[flockingObstacleBufferSize];
+            caravanObstacleBuffer = new Collider[flockingObstacleBufferSize];
         }
 
         void ApplyFlockingToMiners()
@@ -167,7 +154,7 @@ namespace IA.FSM
                 }
             }
 
-            AgentFlockingSolver.Apply(
+            AgentFlockingManager.Apply(
                 minerFlockingSnapshots,
                 minerFlockingSettings,
                 obstacleMask,
@@ -206,7 +193,7 @@ namespace IA.FSM
                 }
             }
 
-            AgentFlockingSolver.Apply(
+            AgentFlockingManager.Apply(
                 caravanFlockingSnapshots,
                 caravanFlockingSettings,
                 obstacleMask,

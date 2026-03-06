@@ -24,42 +24,6 @@ namespace IA.FSM.Flocking
         [Min(0f)] public float maxSteer;
         [Min(0.1f)] public float spatialHashCellSize;
 
-        public static AgentFlockingSettings CreateDefaultMiner()
-        {
-            return new AgentFlockingSettings
-            {
-                alignmentDist = 1.5f,
-                cohesionDist = 1.75f,
-                separationDist = 1.2f,
-                obstacleDist = 1.0f,
-                alignmentMod = 0.7f,
-                cohesionMod = 0.5f,
-                separationMod = 1.75f,
-                obstacleMod = 1.25f,
-                minSpacing = 0.45f,
-                maxSteer = 0.75f,
-                spatialHashCellSize = 1.5f
-            };
-        }
-
-        public static AgentFlockingSettings CreateDefaultCaravan()
-        {
-            return new AgentFlockingSettings
-            {
-                alignmentDist = 2.25f,
-                cohesionDist = 2.5f,
-                separationDist = 1.6f,
-                obstacleDist = 1.5f,
-                alignmentMod = 0.65f,
-                cohesionMod = 0.45f,
-                separationMod = 1.85f,
-                obstacleMod = 1.35f,
-                minSpacing = 0.75f,
-                maxSteer = 0.65f,
-                spatialHashCellSize = 2.0f
-            };
-        }
-
         public AgentFlockingSettings ClampValues()
         {
             AgentFlockingSettings clamped = this;
@@ -109,7 +73,7 @@ namespace IA.FSM.Flocking
         }
     }
 
-    public static class AgentFlockingSolver
+    public static class AgentFlockingManager
     {
         const float SqrEpsilon = 0.000001f;
 
