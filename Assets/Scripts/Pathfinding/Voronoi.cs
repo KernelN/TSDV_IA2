@@ -4,7 +4,588 @@ using UnityEngine;
 
 namespace IA.Pathfinding.Voronoi
 {
-    internal class Voronoi
+    public class Voronoi
+    {
+        const float PolygonEpsilon = 0.0001f;
+
+        public class VoronoiMidpoint
+        {
+            public Vector2Int gridPos;
+            public Vector2 pos;
+            public float sqrRadius;
+            public VoronoiSite siteA;
+            public VoronoiSite siteB;
+
+            public VoronoiMidpoint(Vector2Int gridPos, Vector2 pos, float sqrRadius,
+                VoronoiSite siteA, VoronoiSite siteB)
+            {
+                this.gridPos = gridPos;
+                this.pos = pos;
+                this.sqrRadius = sqrRadius;
+                this.siteA = siteA;
+                this.siteB = siteB;
+            }
+        }
+
+        public class VoronoiSite
+        {
+            public PointOfInterest site;
+            public Vector2Int gridPos => site.gridPos;
+            public List<Vector2> polygonVertices;
+            public Dictionary<VoronoiSite, VoronoiMidpoint> midpointsByOtherSite;
+
+            public VoronoiSite(PointOfInterest site)
+            {
+                this.site = site;
+                polygonVertices = new List<Vector2>();
+                midpointsByOtherSite = new Dictionary<VoronoiSite, VoronoiMidpoint>();
+            }
+
+            public bool HasMidpoint(VoronoiSite otherSite)
+                => otherSite != null && midpointsByOtherSite.ContainsKey(otherSite);
+
+            public bool TryGetMidpoint(VoronoiSite otherSite, out VoronoiMidpoint midpoint)
+            {
+                midpoint = null;
+                return otherSite != null && midpointsByOtherSite.TryGetValue(otherSite, out midpoint);
+            }
+
+            public void AddMidpoint(VoronoiSite otherSite, VoronoiMidpoint midpoint)
+            {
+                if (otherSite == null || midpoint == null || otherSite == this)
+                    return;
+
+                //Add the midpoint to this site and the other site.
+                if(midpointsByOtherSite.TryAdd(otherSite, midpoint))
+                    otherSite.midpointsByOtherSite.TryAdd(this, midpoint);
+            }
+
+            public bool RemoveMidpoint(VoronoiSite otherSite)
+            {
+                if (otherSite == null || !midpointsByOtherSite.Remove(otherSite))
+                    return false;
+
+                otherSite.midpointsByOtherSite.Remove(this);
+
+                return true;
+            }
+        }
+
+        PointOfInterest[] sites;
+        Vector2Int mapSize;
+        PathNode[,] nodeGrid;
+
+        List<VoronoiSite> validSites = new List<VoronoiSite>();
+        Dictionary<PointOfInterest, VoronoiSite> sitesByPoi = new Dictionary<PointOfInterest, VoronoiSite>();
+
+        int voronoiVersion;
+
+        public int VoronoiVersion => voronoiVersion;
+        public IReadOnlyDictionary<PointOfInterest, VoronoiSite> SitesByPoi => sitesByPoi;
+
+        public Voronoi(PointOfInterest[] sites, Vector2Int mapSize, PathNode[,] nodeGrid)
+        {
+            this.sites = sites ?? new PointOfInterest[0];
+            this.mapSize = new Vector2Int(Mathf.Max(1, mapSize.x), Mathf.Max(1, mapSize.y));
+            this.nodeGrid = nodeGrid;
+
+            voronoiVersion = 0;
+            
+            CalculateFullVoronoi();
+        }
+
+        public void CalculateFullVoronoi()
+        {
+            // Every full rebuild creates a new version. Nodes keep the version number of
+            // their cached closest site, so old answers become stale automatically.
+            voronoiVersion++;
+            RebuildAllVoronoiData();
+        }
+
+        public Vector2Int GetClosestSite(Vector2Int nodeGridPosition)
+        {
+            // If the requested node is outside the known grid, there is no safe site to return.
+            if (!IsGridPositionValid(nodeGridPosition) || validSites.Count == 0)
+                return new Vector2Int(-1, -1);
+
+            PathNode node = nodeGrid[nodeGridPosition.x, nodeGridPosition.y];
+            if (node == null)
+                return new Vector2Int(-1, -1);
+
+            // A node can reuse its previous answer as long as the Voronoi version still matches.
+            if (node.hasClosestVoronoiSite && node.closestVoronoiVersion == voronoiVersion)
+                return node.closestVoronoiSiteGridPos;
+
+            List<VoronoiSite> sortedSites = new List<VoronoiSite>(validSites);
+            sortedSites.Sort((firstSite, secondSite) =>
+            {
+                float firstDistance = GetSquaredEuclideanDistance(nodeGridPosition, firstSite.gridPos);
+                float secondDistance = GetSquaredEuclideanDistance(nodeGridPosition, secondSite.gridPos);
+                if (!Mathf.Approximately(firstDistance, secondDistance))
+                    return firstDistance.CompareTo(secondDistance);
+
+                int xComparison = firstSite.gridPos.x.CompareTo(secondSite.gridPos.x);
+                if (xComparison != 0)
+                    return xComparison;
+
+                int yComparison = firstSite.gridPos.y.CompareTo(secondSite.gridPos.y);
+                if (yComparison != 0)
+                    return yComparison;
+
+                return firstSite.site.id.CompareTo(secondSite.site.id);
+            });
+
+            Vector2 pointInGridSpace = new Vector2(nodeGridPosition.x, nodeGridPosition.y);
+            for (int i = 0; i < sortedSites.Count; i++)
+            {
+                VoronoiSite candidateSite = sortedSites[i];
+
+                // The polygon check is a 2D ray-crossing test in grid space.
+                // It is called a raycast here because a horizontal ray is counted against polygon edges.
+                if (!IsPointInsidePolygon(pointInGridSpace, candidateSite.polygonVertices))
+                    continue;
+
+                CacheClosestSiteOnNode(node, candidateSite.gridPos);
+                return candidateSite.gridPos;
+            }
+
+            // Temporary midpoint polygons can overlap or leave gaps while the weighted vertex stage is still pending.
+            // If no polygon catches the node, the nearest sorted site keeps the query useful and deterministic.
+            VoronoiSite fallbackSite = sortedSites[0];
+            CacheClosestSiteOnNode(node, fallbackSite.gridPos);
+            return fallbackSite.gridPos;
+        }
+
+        public void CalculatePartialVoronoi(PointOfInterest removedSite)
+        {
+            // A partial rebuild also creates a new version so cached node answers expire.
+            voronoiVersion++;
+
+            if (removedSite == null || !sitesByPoi.ContainsKey(removedSite) || !IsGridPositionValid(removedSite.gridPos))
+            {
+                // If the changed site is unknown, the affected region cannot be trusted.
+                // Rebuilding all data under this version keeps the answer correct.
+                RebuildAllVoronoiData();
+                return;
+            }
+
+            VoronoiSite changedSite = sitesByPoi[removedSite];
+            List<VoronoiSite> linkedSites = new List<VoronoiSite>(changedSite.midpointsByOtherSite.Keys);
+
+            for (int i = 0; i < linkedSites.Count; i++)
+                changedSite.RemoveMidpoint(linkedSites[i]);
+
+            // Partial recalculation only restores the pairs that were already linked to the changed site.
+            for (int i = 0; i < linkedSites.Count; i++)
+                EnsureMidpointBetweenSites(changedSite, linkedSites[i]);
+
+            // The partial path only checks pairs connected to the changed site.
+            // This keeps the update small, even though a full rebuild is the only way to refresh every global radius test.
+            RemoveInvalidMidpointsForSite(changedSite);
+
+            // Corner ownership is shared across the whole diagram, so polygon support must
+            // be rebuilt in one deterministic pass even when midpoint edits were local.
+            RebuildSitePolygons();
+        }
+
+        void RebuildAllVoronoiData()
+        {
+            // The site dictionary is rebuilt first so every later step can use clean lookups.
+            validSites.Clear();
+            sitesByPoi.Clear();
+
+            for (int i = 0; i < sites.Length; i++)
+            {
+                PointOfInterest poi = sites[i];
+                if (poi == null) continue;
+
+                VoronoiSite site = new VoronoiSite(poi);
+                sitesByPoi.TryAdd(poi, site);
+                validSites.Add(site);
+            }
+
+            // Get the midpoint to every site.
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site1 = validSites[i];
+                for (int j = i + 1; j < validSites.Count; j++)
+                    EnsureMidpointBetweenSites(site1, validSites[j]);
+            }
+
+            RemoveInvalidMidpoints();
+
+            // The temporary polygon is assembled from valid midpoint positions.
+            // The later vertex stage will replace this with shared vertices and terrain movement.
+            RebuildSitePolygons();
+        }
+
+        void RebuildSitePolygons()
+        {
+            List<Vector2> availableMapCorners = CreateMapRectanglePolygon();
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site = validSites[i];
+                site.polygonVertices = BuildPolygonForSite(site, availableMapCorners);
+            }
+        }
+
+        VoronoiMidpoint CalculateMidpointBetweenSites(VoronoiSite siteA, VoronoiSite siteB)
+        {
+            Vector2 siteAPos = GetSiteGridPosition(siteA);
+            Vector2 siteBPos = GetSiteGridPosition(siteB);
+            
+            //A + B / 2 is the same as A + dispToB / 2 
+            Vector2 midpoint = (siteAPos + siteBPos) * 0.5f;
+
+            Vector2Int gridMidpoint = RoundToGridPosition(midpoint);
+
+            //Store sqr dist from site to midpoint
+            //to later use as radius to check midpoint validity 
+            float sqrRadius = (siteAPos - midpoint).sqrMagnitude;
+
+            return new VoronoiMidpoint(gridMidpoint, midpoint, sqrRadius, siteA, siteB);
+        }
+
+        List<Vector2> BuildPolygonForSite(VoronoiSite site, List<Vector2> availableMapCorners)
+        {
+            if (validSites.Count == 1)
+                return CreateMapRectanglePolygon();
+
+            List<Vector2> polygon = new List<Vector2>();
+            foreach (var midpoint in site.midpointsByOtherSite.Values)
+                polygon.Add(midpoint.pos);
+
+            AddBoundaryVertices(site, polygon, availableMapCorners);
+
+            // Sorting by angle turns the loose set of points into a drawable loop around the site.
+            // This is a temporary shape until the shared-vertex stage builds the real boundary graph.
+            SortPolygonVerticesAroundSite(site, polygon);
+
+            return polygon;
+        }
+
+        List<Vector2> CreateMapRectanglePolygon()
+        {
+            // The map rectangle is used when a single site owns the whole map,
+            // and also as temporary support when a sparse midpoint set cannot close a polygon.
+            float maxX = mapSize.x - 1;
+            float maxY = mapSize.y - 1;
+
+            return new List<Vector2>
+            {
+                new Vector2(0f, 0f),
+                new Vector2(maxX, 0f),
+                new Vector2(maxX, maxY),
+                new Vector2(0f, maxY)
+            };
+        }
+
+        void AddBoundaryVertices(VoronoiSite site, List<Vector2> polygon, List<Vector2> availableMapCorners)
+        {
+            if (site == null || polygon == null)
+                return;
+
+            if (availableMapCorners != null)
+            {
+                List<Vector2> cornersToCheck = new List<Vector2>(availableMapCorners);
+                for (int i = 0; i < cornersToCheck.Count; i++)
+                {
+                    Vector2 corner = cornersToCheck[i];
+                    if (!IsBoundaryPointValidByRadius(site, corner))
+                        continue;
+
+                    polygon.Add(corner);
+
+                    availableMapCorners.RemoveAt(i);
+                }
+            }
+
+            Vector2 closestMapLimit = GetClosestMapLimitProjection(site);
+            if (IsBoundaryPointValidByRadius(site, closestMapLimit) &&
+                !ContainsVertex(polygon, closestMapLimit))
+                polygon.Add(closestMapLimit);
+        }
+
+        void SortPolygonVerticesAroundSite(VoronoiSite site, List<Vector2> polygon)
+        {
+            if (polygon == null || polygon.Count < 2)
+                return;
+
+            Vector2 sitePosition = GetSiteGridPosition(site);
+            polygon.Sort((firstVertex, secondVertex) =>
+            {
+                float firstAngle = Mathf.Atan2(firstVertex.y - sitePosition.y, firstVertex.x - sitePosition.x);
+                float secondAngle = Mathf.Atan2(secondVertex.y - sitePosition.y, secondVertex.x - sitePosition.x);
+                if (!Mathf.Approximately(firstAngle, secondAngle))
+                    return firstAngle.CompareTo(secondAngle);
+
+                float firstDistance = (firstVertex - sitePosition).sqrMagnitude;
+                float secondDistance = (secondVertex - sitePosition).sqrMagnitude;
+                return firstDistance.CompareTo(secondDistance);
+            });
+        }
+
+        bool IsPointInsidePolygon(Vector2 point, List<Vector2> polygonVertices)
+        {
+            if (polygonVertices == null || polygonVertices.Count < 3)
+                return false;
+
+            bool isInside = false;
+            int previousIndex = polygonVertices.Count - 1;
+
+            for (int currentIndex = 0; currentIndex < polygonVertices.Count; currentIndex++)
+            {
+                Vector2 previousVertex = polygonVertices[previousIndex];
+                Vector2 currentVertex = polygonVertices[currentIndex];
+
+                if (IsPointOnSegment(point, previousVertex, currentVertex))
+                    return true;
+
+                bool crossesPointHeight = (currentVertex.y > point.y) != (previousVertex.y > point.y);
+                if (crossesPointHeight)
+                {
+                    float xIntersection = (previousVertex.x - currentVertex.x) * (point.y - currentVertex.y) /
+                                          (previousVertex.y - currentVertex.y) + currentVertex.x;
+
+                    if (point.x < xIntersection)
+                        isInside = !isInside;
+                }
+
+                previousIndex = currentIndex;
+            }
+
+            return isInside;
+        }
+
+        bool IsPointOnSegment(Vector2 point, Vector2 segmentStart, Vector2 segmentEnd)
+        {
+            Vector2 segment = segmentEnd - segmentStart;
+            Vector2 pointFromStart = point - segmentStart;
+            float cross = segment.x * pointFromStart.y - segment.y * pointFromStart.x;
+            if (Mathf.Abs(cross) > PolygonEpsilon)
+                return false;
+
+            float dot = Vector2.Dot(pointFromStart, segment);
+            if (dot < -PolygonEpsilon)
+                return false;
+
+            return dot <= segment.sqrMagnitude + PolygonEpsilon;
+        }
+
+        void EnsureMidpointBetweenSites(VoronoiSite firstSite, VoronoiSite secondSite)
+        {
+            if (firstSite.HasMidpoint(secondSite))
+                return;
+
+            VoronoiMidpoint midpoint = CalculateMidpointBetweenSites(firstSite, secondSite);
+            firstSite.AddMidpoint(secondSite, midpoint);
+        }
+
+        void RemoveInvalidMidpoints()
+        {
+            HashSet<VoronoiMidpoint> checkedMidpoints = new HashSet<VoronoiMidpoint>();
+
+            for (int i = 0; i < validSites.Count; i++)
+                RemoveInvalidMidpointsForSite(validSites[i], checkedMidpoints);
+        }
+
+        /// <summary>
+        /// Runs through all midpoints of the site
+        /// If any midpoint has another site in its radius, it is invalid and is removed
+        /// </summary>
+        /// <param name="site"></param>
+        /// <param name="checkedMidpoints">OPTIONAL:
+        /// hashset of midpoints that were already checked and approved,
+        /// so they can be skipped</param>
+        void RemoveInvalidMidpointsForSite(VoronoiSite site, HashSet<VoronoiMidpoint> checkedMidpoints = null)
+        {
+            if (site == null)
+                return;
+
+            HashSet<VoronoiSite> invalidOtherSites = new HashSet<VoronoiSite>();
+            List<VoronoiSite> linkedSites = new List<VoronoiSite>(site.midpointsByOtherSite.Keys);
+
+            // Partial recalculation intentionally stays local to the changed site.
+            // Full rebuilds pass a shared hash set so the same linked midpoint is only validated once.
+            for (int i = 0; i < linkedSites.Count; i++)
+            {
+                VoronoiSite otherSite = linkedSites[i];
+                if (!site.TryGetMidpoint(otherSite, out VoronoiMidpoint midpoint))
+                    continue;
+
+                if (checkedMidpoints != null && !checkedMidpoints.Add(midpoint))
+                    continue;
+
+                if (!IsMidpointValidByEuclideanRadius(midpoint))
+                    invalidOtherSites.Add(otherSite);
+            }
+
+            foreach (VoronoiSite invalidSite in invalidOtherSites)
+                site.RemoveMidpoint(invalidSite);
+        }
+
+        bool IsMidpointValidByEuclideanRadius(VoronoiMidpoint midpoint)
+        {
+            if (midpoint == null)
+                return false;
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site = validSites[i];
+                if (site == midpoint.siteA || site == midpoint.siteB)
+                    continue;
+
+                //If any other site besides the parents are inside the radius,
+                //the midpoint is not valid, as there is a closer site in direction
+                Vector2 sitePosition = GetSiteGridPosition(site);
+                float distanceToMidpointSqr = (sitePosition - midpoint.pos).sqrMagnitude;
+                if (distanceToMidpointSqr < midpoint.sqrRadius - PolygonEpsilon)
+                    return false;
+            }
+
+            return true;
+        }
+
+        bool IsBoundaryPointValidByRadius(VoronoiSite ownerSite, Vector2 point)
+        {
+            if (ownerSite == null)
+                return false;
+
+            Vector2 ownerSitePosition = GetSiteGridPosition(ownerSite);
+            float pointRadiusSqr = (ownerSitePosition - point).sqrMagnitude;
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite otherSite = validSites[i];
+                if (otherSite == ownerSite)
+                    continue;
+
+                Vector2 otherSitePos = GetSiteGridPosition(otherSite);
+                float distanceToPointSqr = (otherSitePos - point).sqrMagnitude;
+                if (distanceToPointSqr < pointRadiusSqr - PolygonEpsilon)
+                    return false;
+            }
+
+            return true;
+        }
+
+        void CacheClosestSiteOnNode(PathNode node, Vector2Int closestSiteGridPosition)
+        {
+            node.hasClosestVoronoiSite = true;
+            node.closestVoronoiSiteGridPos = closestSiteGridPosition;
+            node.closestVoronoiVersion = voronoiVersion;
+        }
+
+        bool IsGridPositionValid(Vector2Int gridPosition)
+        {
+            if (nodeGrid == null)
+                return false;
+
+            int gridWidth = nodeGrid.GetLength(0);
+            int gridHeight = nodeGrid.GetLength(1);
+            if (gridPosition.x < 0 || gridPosition.x >= gridWidth)
+                return false;
+
+            if (gridPosition.y < 0 || gridPosition.y >= gridHeight)
+                return false;
+
+            return gridPosition.x < mapSize.x && gridPosition.y < mapSize.y;
+        }
+
+        Vector2Int ClampGridPosition(Vector2Int gridPosition)
+        {
+            int gridWidth = nodeGrid != null ? nodeGrid.GetLength(0) : mapSize.x;
+            int gridHeight = nodeGrid != null ? nodeGrid.GetLength(1) : mapSize.y;
+            int maxX = Mathf.Max(0, Mathf.Min(mapSize.x, gridWidth) - 1);
+            int maxY = Mathf.Max(0, Mathf.Min(mapSize.y, gridHeight) - 1);
+            int clampedX = Mathf.Clamp(gridPosition.x, 0, maxX);
+            int clampedY = Mathf.Clamp(gridPosition.y, 0, maxY);
+
+            return new Vector2Int(clampedX, clampedY);
+        }
+
+        Vector2Int RoundToGridPosition(Vector2 gridPosition)
+        {
+            Vector2Int roundedGridPosition = new Vector2Int(
+                Mathf.RoundToInt(gridPosition.x),
+                Mathf.RoundToInt(gridPosition.y));
+
+            return ClampGridPosition(roundedGridPosition);
+        }
+
+        Vector2 GetSiteGridPosition(VoronoiSite site) 
+            => new(site.gridPos.x, site.gridPos.y);
+
+        Vector2 GetClosestMapLimitProjection(VoronoiSite site)
+        {
+            Vector2 pos = GetSiteGridPosition(site);
+            float maxX = mapSize.x - 1f;
+            float maxY = mapSize.y - 1f;
+
+            // Check if site is closer to left limit or right limit
+            float distToRight = maxX - pos.x;
+            float minHorDist;
+            float horEdge;
+            //if right is closer than left, save dist to max as min hor dist
+            if (distToRight < pos.x) 
+            {
+                minHorDist = distToRight;
+                horEdge = maxX;
+            }
+            else //if left closer is, save pos (dist to 0) as hor dist
+            {
+                minHorDist = pos.x;
+                horEdge = 0f;
+            }
+
+            // Check if site is closer to bottom limit or top limit
+            float distToTop = maxY - pos.y;
+            float minVerDist;
+            float verEdge;
+            if (distToTop < pos.y) //if top is closer than bottom
+            {
+                minVerDist = distToTop;
+                verEdge = maxY;
+            }
+            else //if bottom is closer
+            {
+                minVerDist = pos.y;
+                verEdge = 0f;
+            }
+
+            // if vertical distance is smaller, use the vertical edge
+            if (minVerDist < minHorDist)
+                return new Vector2(pos.x, verEdge);
+
+            return new Vector2(horEdge, pos.y);
+        }
+
+        float GetSquaredEuclideanDistance(Vector2Int firstGridPosition, Vector2Int secondGridPosition)
+        {
+            // Squared distance keeps the same ordering as Euclidean distance.
+            // Avoiding the square root makes repeated nearest-site sorting cheaper.
+            Vector2Int difference = firstGridPosition - secondGridPosition;
+            return difference.x * difference.x + difference.y * difference.y;
+        }
+
+        bool ContainsVertex(List<Vector2> vertices, Vector2 candidateVertex)
+        {
+            // Vertices are floats, so exact equality is too strict.
+            // A tiny epsilon treats points in the same place as duplicates.
+            if (vertices == null)
+                return false;
+
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                if ((vertices[i] - candidateVertex).sqrMagnitude <= PolygonEpsilon)
+                    return true;
+            }
+
+            return false;
+        }
+
+    }
+    internal class VoronoiOLD
     {
         const int MaxIncrementalDirtyCells = 256;
         const float MaxIncrementalDirtyRatio = 0.01f;
@@ -15,7 +596,7 @@ namespace IA.Pathfinding.Voronoi
         public int version;
         public int poiVersion;
 
-        public Voronoi(int[] regionsByNodeIndex, int[] nearestCostByNodeIndex, int version, int poiVersion)
+        public VoronoiOLD(int[] regionsByNodeIndex, int[] nearestCostByNodeIndex, int version, int poiVersion)
         {
             this.regionsByNodeIndex = regionsByNodeIndex;
             this.nearestCostByNodeIndex = nearestCostByNodeIndex;
@@ -23,25 +604,25 @@ namespace IA.Pathfinding.Voronoi
             this.poiVersion = poiVersion;
         }
 
-        internal Voronoi DeepClone()
+        internal VoronoiOLD DeepClone()
         {
             if (regionsByNodeIndex == null || nearestCostByNodeIndex == null)
                 return null;
 
-            return new Voronoi(
+            return new VoronoiOLD(
                 (int[])regionsByNodeIndex.Clone(),
                 (int[])nearestCostByNodeIndex.Clone(),
                 version,
                 poiVersion);
         }
 
-        internal static Voronoi BuildTerrainRecalculationVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
-            bool[] walkableByNode, int[] weightByNode, List<NodeTerrainDelta> changes, Voronoi baselineVoronoi,
+        internal static VoronoiOLD BuildTerrainRecalculationVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
+            bool[] walkableByNode, int[] weightByNode, List<NodeTerrainDelta> changes, VoronoiOLD baselineVoronoi,
             int[][] neighbourIndicesByNode, PathGrid grid)
         {
             if (ShouldUseIncremental(changes, walkableByNode.Length) && baselineVoronoi != null)
             {
-                Voronoi incremental = TryBuildIncrementalVoronoi(version, snapshotPoiVersion, sources,
+                VoronoiOLD incremental = TryBuildIncrementalVoronoi(version, snapshotPoiVersion, sources,
                     walkableByNode, weightByNode, changes, baselineVoronoi, neighbourIndicesByNode, grid);
 
                 if (incremental != null)
@@ -52,7 +633,7 @@ namespace IA.Pathfinding.Voronoi
                 neighbourIndicesByNode, grid);
         }
 
-        internal static Voronoi BuildFullVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
+        internal static VoronoiOLD BuildFullVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
             bool[] walkableByNode, int[] weightByNode, int[][] neighbourIndicesByNode, PathGrid grid)
         {
             int nodeCount = walkableByNode.Length;
@@ -66,7 +647,7 @@ namespace IA.Pathfinding.Voronoi
             }
 
             if (sources == null || sources.Count <= 0)
-                return new Voronoi(regions, nearestCosts, version, snapshotPoiVersion);
+                return new VoronoiOLD(regions, nearestCosts, version, snapshotPoiVersion);
 
             MinPriorityQueue queue = new MinPriorityQueue();
             for (int i = 0; i < sources.Count; i++)
@@ -111,7 +692,7 @@ namespace IA.Pathfinding.Voronoi
                 }
             }
 
-            return new Voronoi(regions, nearestCosts, version, snapshotPoiVersion);
+            return new VoronoiOLD(regions, nearestCosts, version, snapshotPoiVersion);
         }
 
         static bool ShouldUseIncremental(IReadOnlyList<NodeTerrainDelta> changes, int nodeCount)
@@ -138,9 +719,9 @@ namespace IA.Pathfinding.Voronoi
             return true;
         }
 
-        static Voronoi TryBuildIncrementalVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
+        static VoronoiOLD TryBuildIncrementalVoronoi(int version, int snapshotPoiVersion, List<PoiSource> sources,
             bool[] walkableByNode, int[] weightByNode, IReadOnlyList<NodeTerrainDelta> changes,
-            Voronoi baselineVoronoi, int[][] neighbourIndicesByNode, PathGrid grid)
+            VoronoiOLD baselineVoronoi, int[][] neighbourIndicesByNode, PathGrid grid)
         {
             if (baselineVoronoi.regionsByNodeIndex == null || baselineVoronoi.nearestCostByNodeIndex == null)
                 return null;
@@ -269,7 +850,7 @@ namespace IA.Pathfinding.Voronoi
                 }
             }
 
-            return new Voronoi(regions, nearestCosts, version, snapshotPoiVersion);
+            return new VoronoiOLD(regions, nearestCosts, version, snapshotPoiVersion);
         }
 
         static bool IsBetterCandidate(int candidateCost, int candidatePoi, int currentCost, int currentPoi)

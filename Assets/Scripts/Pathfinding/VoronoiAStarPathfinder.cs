@@ -25,10 +25,10 @@ namespace IA.Pathfinding.Voronoi
         readonly object terrainStateLock = new object();
         readonly Dictionary<int, NodeTerrainDelta> queuedTerrainChangesByNode = new Dictionary<int, NodeTerrainDelta>();
 
-        Voronoi activeVoronoi;
-        Voronoi stagedTerrainVoronoi;
+        VoronoiOLD activeVoronoi;
+        VoronoiOLD stagedTerrainVoronoi;
 
-        Task<Voronoi> runningTerrainTask;
+        Task<VoronoiOLD> runningTerrainTask;
         bool terrainTaskRunning;
         bool terrainRequestPending;
         float terrainRequestDeadline;
@@ -95,7 +95,7 @@ namespace IA.Pathfinding.Voronoi
         }
         public void DrawGizmos()
         {
-            Voronoi snapshot = activeVoronoi;
+            VoronoiOLD snapshot = activeVoronoi;
             if (snapshot == null || snapshot.regionsByNodeIndex == null)
                 return;
 
@@ -130,7 +130,7 @@ namespace IA.Pathfinding.Voronoi
         }
         public int FindPointRegion(Vector2Int gridPos)
         {
-            Voronoi snapshot = activeVoronoi;
+            VoronoiOLD snapshot = activeVoronoi;
             if (snapshot == null || snapshot.regionsByNodeIndex == null)
                 return -1;
 
@@ -290,7 +290,7 @@ namespace IA.Pathfinding.Voronoi
         }
         public void TickTerrainRecalculation(float now)
         {
-            Task<Voronoi> completedTask = null;
+            Task<VoronoiOLD> completedTask = null;
             List<NodeTerrainDelta> jobChanges = null;
             int jobVersion = 0;
             int jobPoiVersion = 0;
@@ -332,10 +332,10 @@ namespace IA.Pathfinding.Voronoi
             
             List<PoiSource> sources = GetCurrentPOIs();
             
-            Voronoi baselineVoronoi = activeVoronoi.DeepClone();
+            VoronoiOLD baselineVoronoi = activeVoronoi.DeepClone();
 
-            Task<Voronoi> startedTask = Task.Run(
-                () => Voronoi.BuildTerrainRecalculationVoronoi(jobVersion, jobPoiVersion, sources, walkableByNode, weightByNode,
+            Task<VoronoiOLD> startedTask = Task.Run(
+                () => VoronoiOLD.BuildTerrainRecalculationVoronoi(jobVersion, jobPoiVersion, sources, walkableByNode, weightByNode,
                     jobChanges, baselineVoronoi, neighbourIndicesByNode, grid));
 
             lock (terrainStateLock)
@@ -346,7 +346,7 @@ namespace IA.Pathfinding.Voronoi
         }
         public bool CommitPendingTerrainVoronoi()
         {
-            Voronoi voronoiToCommit;
+            VoronoiOLD voronoiToCommit;
 
             lock (terrainStateLock)
             {
@@ -437,7 +437,7 @@ namespace IA.Pathfinding.Voronoi
             List<PoiSource> sources = GetCurrentPOIs();
 
             ReadTerrainStateVersions(out int snapshotVersion, out int snapshotPoiVersion);
-            Voronoi snapshot = Voronoi.BuildFullVoronoi(snapshotVersion, snapshotPoiVersion, sources, walkableByNode, weightByNode, neighbourIndicesByNode, grid);
+            VoronoiOLD snapshot = VoronoiOLD.BuildFullVoronoi(snapshotVersion, snapshotPoiVersion, sources, walkableByNode, weightByNode, neighbourIndicesByNode, grid);
             SetActiveVoronoi(snapshot);
         }
         void UpdateVoronoi()
@@ -465,7 +465,7 @@ namespace IA.Pathfinding.Voronoi
 
             return sources;
         }
-        void SetActiveVoronoi(Voronoi snapshot)
+        void SetActiveVoronoi(VoronoiOLD snapshot)
         {
             activeVoronoi = snapshot;
             regionsByNodeIndex = snapshot.regionsByNodeIndex;
@@ -512,9 +512,9 @@ namespace IA.Pathfinding.Voronoi
             }
         }
         ///Try get Voronoi from completed task
-        void HandleCompletedTerrainTask(Task<Voronoi> completedTask)
+        void HandleCompletedTerrainTask(Task<VoronoiOLD> completedTask)
         {
-            Voronoi result;
+            VoronoiOLD result;
             try
             {
                 result = completedTask.GetAwaiter().GetResult();
