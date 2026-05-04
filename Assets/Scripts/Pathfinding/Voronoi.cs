@@ -4,26 +4,31 @@ using UnityEngine;
 
 namespace IA.Pathfinding.Voronoi
 {
+    //https://demonstrations.wolfram.com/AlphaComplexAndUnionOfGrowingDisks/
+    //Great for visualization
     public class Voronoi
     {
         const float PolygonEpsilon = 0.0001f;
+        const float DistanceTieEpsilon = 0.01f;
 
-        public class VoronoiMidpoint
+        public class VoronoiVertex
         {
             public Vector2Int gridPos;
             public Vector2 pos;
-            public float sqrRadius;
-            public VoronoiSite siteA;
-            public VoronoiSite siteB;
+            public List<VoronoiSite> linkedSites;
+            public bool touchesMapBoundary;
+            public Vector2 boundaryNormal;
+            public Vector2 boundaryAxis;
 
-            public VoronoiMidpoint(Vector2Int gridPos, Vector2 pos, float sqrRadius,
-                VoronoiSite siteA, VoronoiSite siteB)
+            public VoronoiVertex(Vector2Int gridPos, Vector2 pos, List<VoronoiSite> linkedSites,
+                bool touchesMapBoundary, Vector2 boundaryNormal, Vector2 boundaryAxis)
             {
                 this.gridPos = gridPos;
                 this.pos = pos;
-                this.sqrRadius = sqrRadius;
-                this.siteA = siteA;
-                this.siteB = siteB;
+                this.linkedSites = linkedSites ?? new List<VoronoiSite>();
+                this.touchesMapBoundary = touchesMapBoundary;
+                this.boundaryNormal = boundaryNormal;
+                this.boundaryAxis = boundaryAxis;
             }
         }
 
@@ -32,42 +37,13 @@ namespace IA.Pathfinding.Voronoi
             public PointOfInterest site;
             public Vector2Int gridPos => site.gridPos;
             public List<Vector2> polygonVertices;
-            public Dictionary<VoronoiSite, VoronoiMidpoint> midpointsByOtherSite;
+            public List<VoronoiVertex> polygonVertexObjects;
 
             public VoronoiSite(PointOfInterest site)
             {
                 this.site = site;
                 polygonVertices = new List<Vector2>();
-                midpointsByOtherSite = new Dictionary<VoronoiSite, VoronoiMidpoint>();
-            }
-
-            public bool HasMidpoint(VoronoiSite otherSite)
-                => otherSite != null && midpointsByOtherSite.ContainsKey(otherSite);
-
-            public bool TryGetMidpoint(VoronoiSite otherSite, out VoronoiMidpoint midpoint)
-            {
-                midpoint = null;
-                return otherSite != null && midpointsByOtherSite.TryGetValue(otherSite, out midpoint);
-            }
-
-            public void AddMidpoint(VoronoiSite otherSite, VoronoiMidpoint midpoint)
-            {
-                if (otherSite == null || midpoint == null || otherSite == this)
-                    return;
-
-                //Add the midpoint to this site and the other site.
-                if(midpointsByOtherSite.TryAdd(otherSite, midpoint))
-                    otherSite.midpointsByOtherSite.TryAdd(this, midpoint);
-            }
-
-            public bool RemoveMidpoint(VoronoiSite otherSite)
-            {
-                if (otherSite == null || !midpointsByOtherSite.Remove(otherSite))
-                    return false;
-
-                otherSite.midpointsByOtherSite.Remove(this);
-
-                return true;
+                polygonVertexObjects = new List<VoronoiVertex>();
             }
         }
 
@@ -77,6 +53,7 @@ namespace IA.Pathfinding.Voronoi
 
         List<VoronoiSite> validSites = new List<VoronoiSite>();
         Dictionary<PointOfInterest, VoronoiSite> sitesByPoi = new Dictionary<PointOfInterest, VoronoiSite>();
+        List<VoronoiVertex> vertices = new List<VoronoiVertex>();
 
         int voronoiVersion;
 
@@ -149,8 +126,8 @@ namespace IA.Pathfinding.Voronoi
                 return candidateSite.gridPos;
             }
 
-            // Temporary midpoint polygons can overlap or leave gaps while the weighted vertex stage is still pending.
             // If no polygon catches the node, the nearest sorted site keeps the query useful and deterministic.
+            // This can happen while a site is invalid or duplicated and therefore has no polygon.
             VoronoiSite fallbackSite = sortedSites[0];
             CacheClosestSiteOnNode(node, fallbackSite.gridPos);
             return fallbackSite.gridPos;
@@ -161,31 +138,9 @@ namespace IA.Pathfinding.Voronoi
             // A partial rebuild also creates a new version so cached node answers expire.
             voronoiVersion++;
 
-            if (removedSite == null || !sitesByPoi.ContainsKey(removedSite) || !IsGridPositionValid(removedSite.gridPos))
-            {
-                // If the changed site is unknown, the affected region cannot be trusted.
-                // Rebuilding all data under this version keeps the answer correct.
-                RebuildAllVoronoiData();
-                return;
-            }
-
-            VoronoiSite changedSite = sitesByPoi[removedSite];
-            List<VoronoiSite> linkedSites = new List<VoronoiSite>(changedSite.midpointsByOtherSite.Keys);
-
-            for (int i = 0; i < linkedSites.Count; i++)
-                changedSite.RemoveMidpoint(linkedSites[i]);
-
-            // Partial recalculation only restores the pairs that were already linked to the changed site.
-            for (int i = 0; i < linkedSites.Count; i++)
-                EnsureMidpointBetweenSites(changedSite, linkedSites[i]);
-
-            // The partial path only checks pairs connected to the changed site.
-            // This keeps the update small, even though a full rebuild is the only way to refresh every global radius test.
-            RemoveInvalidMidpointsForSite(changedSite);
-
-            // Corner ownership is shared across the whole diagram, so polygon support must
-            // be rebuilt in one deterministic pass even when midpoint edits were local.
-            RebuildSitePolygons();
+            // Delaunay neighbours can change outside the removed site's old local links.
+            // A full rebuild is easier to trust for this review step, and a smaller partial Delaunay update can be added later.
+            RebuildAllVoronoiData();
         }
 
         void RebuildAllVoronoiData()
@@ -193,7 +148,9 @@ namespace IA.Pathfinding.Voronoi
             // The site dictionary is rebuilt first so every later step can use clean lookups.
             validSites.Clear();
             sitesByPoi.Clear();
+            vertices.Clear();
 
+            HashSet<Vector2Int> usedGridPositions = new HashSet<Vector2Int>();
             for (int i = 0; i < sites.Length; i++)
             {
                 PointOfInterest poi = sites[i];
@@ -201,73 +158,833 @@ namespace IA.Pathfinding.Voronoi
 
                 VoronoiSite site = new VoronoiSite(poi);
                 sitesByPoi.TryAdd(poi, site);
+
+                //Make sure to skip duplicate site positions, to avoid delanuay exploding 
+                if (!IsGridPositionValid(poi.gridPos) || !usedGridPositions.Add(poi.gridPos))
+                    continue;
+
                 validSites.Add(site);
             }
 
-            // Get the midpoint to every site.
-            for (int i = 0; i < validSites.Count; i++)
-            {
-                VoronoiSite site1 = validSites[i];
-                for (int j = i + 1; j < validSites.Count; j++)
-                    EnsureMidpointBetweenSites(site1, validSites[j]);
-            }
+            // Calculate Delanuay / inverted voronoi
+            // The Delaunay triangles are now the source of the Voronoi vertices.
+            // This follows the Delaunay/Voronoi dual rule: each triangle circumcenter becomes a Voronoi vertex.
+            List<DelaunayTriangle> delaunayTriangles = BuildDelaunayTriangles();
 
-            RemoveInvalidMidpoints();
-
-            // The temporary polygon is assembled from valid midpoint positions.
-            // The later vertex stage will replace this with shared vertices and terrain movement.
-            RebuildSitePolygons();
+            // The polygon rebuild collects circumcenters and boundary support vertices,
+            // then each site sorts its own collected points into a closed loop.
+            RebuildSitePolygons(delaunayTriangles);
         }
 
-        void RebuildSitePolygons()
+        void RebuildSitePolygons(List<DelaunayTriangle> delaunayTriangles)
         {
-            List<Vector2> availableMapCorners = CreateMapRectanglePolygon();
-            for (int i = 0; i < validSites.Count; i++)
-            {
-                VoronoiSite site = validSites[i];
-                site.polygonVertices = BuildPolygonForSite(site, availableMapCorners);
-            }
-        }
+            // Start from empty polygon data so every rebuild is fully deterministic.
+            // The vertex list is global, while each site keeps its own ordered view of those vertices.
+            vertices.Clear();
+            ClearSitePolygons();
 
-        VoronoiMidpoint CalculateMidpointBetweenSites(VoronoiSite siteA, VoronoiSite siteB)
-        {
-            Vector2 siteAPos = GetSiteGridPosition(siteA);
-            Vector2 siteBPos = GetSiteGridPosition(siteB);
-            
-            //A + B / 2 is the same as A + dispToB / 2 
-            Vector2 midpoint = (siteAPos + siteBPos) * 0.5f;
+            if (validSites.Count == 0)
+                return;
 
-            Vector2Int gridMidpoint = RoundToGridPosition(midpoint);
-
-            //Store sqr dist from site to midpoint
-            //to later use as radius to check midpoint validity 
-            float sqrRadius = (siteAPos - midpoint).sqrMagnitude;
-
-            return new VoronoiMidpoint(gridMidpoint, midpoint, sqrRadius, siteA, siteB);
-        }
-
-        List<Vector2> BuildPolygonForSite(VoronoiSite site, List<Vector2> availableMapCorners)
-        {
+            // A single site owns the entire map because no bisector can split the rectangle.
             if (validSites.Count == 1)
-                return CreateMapRectanglePolygon();
+            {
+                StorePolygonVerticesForSite(validSites[0], CreateMapRectanglePolygon());
+                return;
+            }
 
-            List<Vector2> polygon = new List<Vector2>();
-            foreach (var midpoint in site.midpointsByOtherSite.Values)
-                polygon.Add(midpoint.pos);
+            // Two sites do not create any Delaunay triangle, so their shared border is the
+            // perpendicular bisector bounded only by the map rectangle endpoints.
+            if (validSites.Count == 2)
+            {
+                RebuildTwoSitePolygons(validSites[0], validSites[1]);
+                return;
+            }
 
-            AddBoundaryVertices(site, polygon, availableMapCorners);
+            if (delaunayTriangles == null || delaunayTriangles.Count == 0)
+                return;
 
-            // Sorting by angle turns the loose set of points into a drawable loop around the site.
-            // This is a temporary shape until the shared-vertex stage builds the real boundary graph.
-            SortPolygonVerticesAroundSite(site, polygon);
+            // Interior Voronoi vertices are the circumcenters of the real Delaunay triangles.
+            // They are linked to the three sites that created each triangle.
+            AddInteriorCircumcenterVertices(delaunayTriangles);
 
-            return polygon;
+            // Hull edges are used by only one triangle. Their Voronoi edges are open rays,
+            // so mirrored sites across the rectangle create the bounded support vertex.
+            AddBoundaryVerticesForOpenDelaunayEdges(delaunayTriangles);
+
+            // Corners are not circumcenters, but they are needed when a cell owns a rectangle corner.
+            // Adding them after the edge vertices keeps every site polygon closed along the map border.
+            AddMapCornersToClosestSites();
+            FinalizeSitePolygons();
+        }
+
+        List<DelaunayTriangle> BuildDelaunayTriangles()
+        {
+            List<DelaunayTriangle> triangulation = new List<DelaunayTriangle>();
+            triangulation.Add(CreateSuperTriangle()); //Add a triangle that holds the whole map first
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite insertedSite = validSites[i];
+                Vector2 sitePos = GetSiteGridPosition(insertedSite);
+
+                // Run through all triangles,
+                // if any of their circumcircle contain the new site,
+                // the triangle is not valid and will be removed
+                List<DelaunayTriangle> badTriangles = new List<DelaunayTriangle>();
+                for (int triangleIndex = 0; triangleIndex < triangulation.Count; triangleIndex++)
+                {
+                    if (triangulation[triangleIndex].CircumcircleContains(sitePos))
+                        badTriangles.Add(triangulation[triangleIndex]);
+                }
+
+                //Store the unique lines of the bad tris so they can be used later
+                //if a line is unique, it means it is on
+                //the edge of the polygon hole left by the bad triangles
+                List<DelaunayEdge> polygonHoleEdges = new List<DelaunayEdge>();
+                for (int badIndex = 0; badIndex < badTriangles.Count; badIndex++)
+                {
+                    List<DelaunayEdge> badTriangleEdges = badTriangles[badIndex].GetEdges();
+                    for (int edgeIndex = 0; edgeIndex < badTriangleEdges.Count; edgeIndex++)
+                    {
+                        DelaunayEdge candidateEdge = badTriangleEdges[edgeIndex];
+                        bool isSharedByAnotherBadTriangle = false;
+
+                        for (int otherBadIndex = 0; otherBadIndex < badTriangles.Count; otherBadIndex++)
+                        {
+                            if (otherBadIndex == badIndex) continue;
+
+                            if (badTriangles[otherBadIndex].HasEdge(candidateEdge))
+                            {
+                                isSharedByAnotherBadTriangle = true;
+                                break;
+                            }
+                        }
+
+                        //If the line/edge is shared by another bad tri,
+                        //it means it is inside the polygon hole
+                        if (!isSharedByAnotherBadTriangle)
+                            polygonHoleEdges.Add(candidateEdge);
+                    }
+                }
+
+                //Remove all bad triangles
+                for (int badIndex = 0; badIndex < badTriangles.Count; badIndex++)
+                    triangulation.Remove(badTriangles[badIndex]);
+
+                // Make new triangles using the borders of the hole and the new site
+                for (int edgeIndex = 0; edgeIndex < polygonHoleEdges.Count; edgeIndex++)
+                {
+                    DelaunayEdge edge = polygonHoleEdges[edgeIndex];
+                    DelaunayTriangle newTriangle = new DelaunayTriangle(
+                        edge.posA, edge.posB, sitePos,
+                        edge.siteA, edge.siteB, insertedSite);
+
+                    //If the new triangle is valid, add it to the list
+                    if (!newTriangle.IsTooSmall())
+                        triangulation.Add(newTriangle);
+                }
+            }
+
+            //Remove the original super triangle
+            //(as it was only needed to calculate the inner tris),
+            //and any invalid triangle
+            triangulation.RemoveAll(triangle => triangle.HasSuperVertex() || triangle.IsTooSmall());
+            return triangulation;
+        }
+
+        DelaunayTriangle CreateSuperTriangle()
+        {
+            // The super-triangle only needs to fully contain the map and every site.
+            // A large margin makes the first Bowyer-Watson insertion easy and stable.
+            float width = mapSize.x;
+            float height = mapSize.y;
+            float margin = Mathf.Max(width, height);
+
+            Vector2 top = new Vector2(width * 0.5f, height + margin);
+            Vector2 bottomLeft = new Vector2(-margin, -margin);
+            Vector2 bottomRight = new Vector2(width + margin, -margin);
+
+            return new DelaunayTriangle(top, bottomLeft, bottomRight, null, null, null);
+        }
+
+        void ClearSitePolygons()
+        {
+            // Sites keep their own polygon lists, so clear each one before adding shared vertices again.
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                validSites[i].polygonVertexObjects.Clear();
+                validSites[i].polygonVertices.Clear();
+            }
+        }
+
+        void AddInteriorCircumcenterVertices(List<DelaunayTriangle> delaunayTriangles)
+        {
+            for (int i = 0; i < delaunayTriangles.Count; i++)
+            {
+                DelaunayTriangle triangle = delaunayTriangles[i];
+                List<VoronoiSite> linkedSites = triangle.GetSites();
+                if (linkedSites.Count != 3)
+                    continue;
+
+                // The Delaunay/Voronoi dual says this circumcenter is shared by the three triangle sites.
+                // It replaces the old midpoint vertices with the real Voronoi vertex.
+                GetOrCreateSharedVertex(
+                    triangle.GetCircumcenter(),
+                    linkedSites,
+                    false,
+                    Vector2.zero,
+                    Vector2.zero,
+                    false);
+            }
+        }
+
+        void AddBoundaryVerticesForOpenDelaunayEdges(List<DelaunayTriangle> delaunayTriangles)
+        {
+            // Counting Delaunay edges reveals the convex hull.
+            // Interior edges are used by two triangles, while hull edges are used by only one.
+            List<DelaunayEdgeUse> edgeUses = BuildDelaunayEdgeUses(delaunayTriangles);
+            for (int i = 0; i < edgeUses.Count; i++)
+            {
+                DelaunayEdgeUse edgeUse = edgeUses[i];
+                if (edgeUse.useCount != 1)
+                    continue;
+
+                AddBoundaryVertexForOpenDelaunayEdge(edgeUse.edge, edgeUse.triangle);
+            }
+        }
+
+        List<DelaunayEdgeUse> BuildDelaunayEdgeUses(List<DelaunayTriangle> delaunayTriangles)
+        {
+            List<DelaunayEdgeUse> edgeUses = new List<DelaunayEdgeUse>();
+            for (int i = 0; i < delaunayTriangles.Count; i++)
+            {
+                DelaunayTriangle triangle = delaunayTriangles[i];
+                List<DelaunayEdge> edges = triangle.GetEdges();
+                for (int edgeIndex = 0; edgeIndex < edges.Count; edgeIndex++)
+                {
+                    DelaunayEdge edge = edges[edgeIndex];
+                    if (edge.siteA == null || edge.siteB == null)
+                        continue;
+
+                    // The same Delaunay edge can be listed in either direction,
+                    // so use the edge comparison helper instead of relying on order.
+                    DelaunayEdgeUse existingEdgeUse = FindDelaunayEdgeUse(edgeUses, edge);
+                    if (existingEdgeUse != null)
+                    {
+                        existingEdgeUse.useCount++;
+                        continue;
+                    }
+
+                    edgeUses.Add(new DelaunayEdgeUse(edge, triangle));
+                }
+            }
+
+            return edgeUses;
+        }
+
+        DelaunayEdgeUse FindDelaunayEdgeUse(List<DelaunayEdgeUse> edgeUses, DelaunayEdge edge)
+        {
+            for (int i = 0; i < edgeUses.Count; i++)
+            {
+                if (edgeUses[i].edge.IsSameEdge(edge))
+                    return edgeUses[i];
+            }
+
+            return null;
+        }
+
+        void AddBoundaryVertexForOpenDelaunayEdge(DelaunayEdge edge, DelaunayTriangle triangle)
+        {
+            if (edge == null || triangle == null || edge.siteA == null || edge.siteB == null)
+                return;
+
+            if (!triangle.TryGetSiteOutsideEdge(edge, out VoronoiSite oppositeSite))
+                return;
+
+            //Inspired by: https://stackoverflow.com/questions/59869376/calculating-the-infinity-points-edges-of-the-delaunay-triangulation
+            // Mirroring one parent site across a rectangle side creates a triangle whose circumcenter lands on that side.
+            List<VoronoiSite> linkedSites = new List<VoronoiSite> { edge.siteA, edge.siteB };
+            if (!TryGetMirroredBoundaryVertex(edge, triangle, oppositeSite,
+                    out Vector2 boundaryPosition, out Vector2 boundaryNormal, out Vector2 boundaryAxis))
+            {
+                // If the mirror triangle is flat or misses the rectangle side, use the same answer's fallback idea:
+                // send the open Voronoi ray from the triangle circumcenter through the hull edge and intersect the box.
+                if (!TryProjectOpenEdgeToMapBoundary(edge, triangle, oppositeSite,
+                        out boundaryPosition, out boundaryNormal, out boundaryAxis))
+                    return;
+            }
+
+            VoronoiVertex boundaryVertex = GetOrCreateSharedVertex(
+                boundaryPosition,
+                linkedSites,
+                true,
+                boundaryNormal,
+                boundaryAxis,
+                true);
+
+            AddVertexToSite(edge.siteA, boundaryVertex);
+            AddVertexToSite(edge.siteB, boundaryVertex);
+        }
+
+        bool TryGetMirroredBoundaryVertex(DelaunayEdge edge, DelaunayTriangle triangle, VoronoiSite oppositeSite,
+            out Vector2 boundaryPosition, out Vector2 boundaryNormal, out Vector2 boundaryAxis)
+        {
+            boundaryPosition = Vector2.zero;
+            boundaryNormal = Vector2.zero;
+            boundaryAxis = Vector2.zero;
+
+            List<BoundarySide> boundarySides = CreateBoundarySides();
+            Vector2 triangleCenter = triangle.GetCircumcenter();
+            float bestDistanceSqr = float.MaxValue;
+            bool foundCandidate = false;
+
+            for (int sideIndex = 0; sideIndex < boundarySides.Count; sideIndex++)
+            {
+                BoundarySide side = boundarySides[sideIndex];
+
+                // Try mirroring both parent sites. Usually one mirror is enough,
+                // but trying both avoids losing the point when the first mirrored triangle is nearly flat.
+                TryUseMirroredSiteCandidate(edge, oppositeSite, side, triangleCenter, edge.siteA,
+                    ref foundCandidate, ref bestDistanceSqr, ref boundaryPosition, ref boundaryNormal, ref boundaryAxis);
+                TryUseMirroredSiteCandidate(edge, oppositeSite, side, triangleCenter, edge.siteB,
+                    ref foundCandidate, ref bestDistanceSqr, ref boundaryPosition, ref boundaryNormal, ref boundaryAxis);
+            }
+
+            return foundCandidate;
+        }
+
+        void TryUseMirroredSiteCandidate(DelaunayEdge edge, VoronoiSite oppositeSite, BoundarySide side,
+            Vector2 triangleCenter, VoronoiSite mirroredSite, ref bool foundCandidate, ref float bestDistanceSqr,
+            ref Vector2 boundaryPosition, ref Vector2 boundaryNormal, ref Vector2 boundaryAxis)
+        {
+            Vector2 siteAPosition = GetSiteGridPosition(edge.siteA);
+            Vector2 siteBPosition = GetSiteGridPosition(edge.siteB);
+            Vector2 mirroredPosition = MirrorPointAcrossBoundarySide(GetSiteGridPosition(mirroredSite), side);
+
+            DelaunayTriangle mirroredTriangle = new DelaunayTriangle(
+                siteAPosition,
+                siteBPosition,
+                mirroredPosition,
+                edge.siteA,
+                edge.siteB,
+                null);
+
+            if (mirroredTriangle.IsTooSmall())
+                return;
+
+            Vector2 candidatePosition = mirroredTriangle.GetCircumcenter();
+            if (!IsPointOnBoundarySideSegment(candidatePosition, side))
+                return;
+
+            if (!IsBoundaryCandidateOutsideHullEdge(edge, oppositeSite, candidatePosition))
+                return;
+
+            float candidateDistanceSqr = (candidatePosition - triangleCenter).sqrMagnitude;
+            if (foundCandidate && candidateDistanceSqr >= bestDistanceSqr)
+                return;
+
+            foundCandidate = true;
+            bestDistanceSqr = candidateDistanceSqr;
+            boundaryPosition = ClampPointToBoundarySide(candidatePosition, side);
+            boundaryNormal = side.normal;
+            boundaryAxis = side.axis;
+        }
+
+        bool TryProjectOpenEdgeToMapBoundary(DelaunayEdge edge, DelaunayTriangle triangle, VoronoiSite oppositeSite,
+            out Vector2 boundaryPosition, out Vector2 boundaryNormal, out Vector2 boundaryAxis)
+        {
+            boundaryPosition = Vector2.zero;
+            boundaryNormal = Vector2.zero;
+            boundaryAxis = Vector2.zero;
+
+            // The open ray points away from the third triangle site and through the hull edge midpoint.
+            // That gives the same direction described for the infinite Voronoi edge fallback.
+            Vector2 rayStart = triangle.GetCircumcenter();
+            Vector2 edgeMidpoint = (edge.posA + edge.posB) * 0.5f;
+            Vector2 oppositePosition = GetSiteGridPosition(oppositeSite);
+            Vector2 rayDirection = edgeMidpoint - oppositePosition;
+            if (rayDirection.sqrMagnitude <= PolygonEpsilon)
+                rayDirection = edgeMidpoint - rayStart;
+
+            if (rayDirection.sqrMagnitude <= PolygonEpsilon)
+                return false;
+
+            return TryIntersectRayWithMapBoundary(rayStart, rayDirection.normalized,
+                out boundaryPosition, out boundaryNormal, out boundaryAxis);
+        }
+
+        bool TryIntersectRayWithMapBoundary(Vector2 rayStart, Vector2 rayDirection,
+            out Vector2 boundaryPosition, out Vector2 boundaryNormal, out Vector2 boundaryAxis)
+        {
+            boundaryPosition = Vector2.zero;
+            boundaryNormal = Vector2.zero;
+            boundaryAxis = Vector2.zero;
+
+            List<BoundarySide> boundarySides = CreateBoundarySides();
+            float bestRayPercent = float.MaxValue;
+            bool foundIntersection = false;
+
+            for (int i = 0; i < boundarySides.Count; i++)
+            {
+                BoundarySide side = boundarySides[i];
+                if (!TryGetRayBoundarySideIntersection(rayStart, rayDirection, side,
+                        out Vector2 candidatePosition, out float rayPercent))
+                    continue;
+
+                if (rayPercent <= PolygonEpsilon || rayPercent >= bestRayPercent)
+                    continue;
+
+                foundIntersection = true;
+                bestRayPercent = rayPercent;
+                boundaryPosition = candidatePosition;
+                boundaryNormal = side.normal;
+                boundaryAxis = side.axis;
+            }
+
+            return foundIntersection;
+        }
+
+        bool TryGetRayBoundarySideIntersection(Vector2 rayStart, Vector2 rayDirection, BoundarySide side,
+            out Vector2 candidatePosition, out float rayPercent)
+        {
+            candidatePosition = Vector2.zero;
+            rayPercent = 0f;
+
+            if (side.isVertical)
+            {
+                if (Mathf.Abs(rayDirection.x) <= PolygonEpsilon)
+                    return false;
+
+                rayPercent = (side.coordinate - rayStart.x) / rayDirection.x;
+                candidatePosition = rayStart + rayDirection * rayPercent;
+            }
+            else
+            {
+                if (Mathf.Abs(rayDirection.y) <= PolygonEpsilon)
+                    return false;
+
+                rayPercent = (side.coordinate - rayStart.y) / rayDirection.y;
+                candidatePosition = rayStart + rayDirection * rayPercent;
+            }
+
+            if (rayPercent <= PolygonEpsilon)
+                return false;
+
+            if (!IsPointOnBoundarySideSegment(candidatePosition, side))
+                return false;
+
+            candidatePosition = ClampPointToBoundarySide(candidatePosition, side);
+            return true;
+        }
+
+        bool IsBoundaryCandidateOutsideHullEdge(DelaunayEdge edge, VoronoiSite oppositeSite, Vector2 candidatePosition)
+        {
+            // The candidate must be on the opposite side of the hull edge from the third triangle site.
+            // This keeps the finite boundary point on the same side as the open Voronoi ray.
+            Vector2 edgeDirection = edge.posB - edge.posA;
+            Vector2 oppositeDirection = GetSiteGridPosition(oppositeSite) - edge.posA;
+            Vector2 candidateDirection = candidatePosition - edge.posA;
+
+            float oppositeSide = Cross(edgeDirection, oppositeDirection);
+            float candidateSide = Cross(edgeDirection, candidateDirection);
+            return oppositeSide * candidateSide <= PolygonEpsilon;
+        }
+
+        Vector2 MirrorPointAcrossBoundarySide(Vector2 point, BoundarySide side)
+        {
+            // Mirroring across a vertical side changes only X; mirroring across a horizontal side changes only Y.
+            if (side.isVertical)
+                return new Vector2(2f * side.coordinate - point.x, point.y);
+
+            return new Vector2(point.x, 2f * side.coordinate - point.y);
+        }
+
+        bool IsPointOnBoundarySideSegment(Vector2 point, BoundarySide side)
+        {
+            if (side.isVertical)
+            {
+                bool isOnSideLine = Mathf.Abs(point.x - side.coordinate) <= DistanceTieEpsilon;
+                bool isInsideSideLimits = point.y >= side.minValue - DistanceTieEpsilon &&
+                                          point.y <= side.maxValue + DistanceTieEpsilon;
+                return isOnSideLine && isInsideSideLimits;
+            }
+
+            bool isOnHorizontalLine = Mathf.Abs(point.y - side.coordinate) <= DistanceTieEpsilon;
+            bool isInsideHorizontalLimits = point.x >= side.minValue - DistanceTieEpsilon &&
+                                            point.x <= side.maxValue + DistanceTieEpsilon;
+            return isOnHorizontalLine && isInsideHorizontalLimits;
+        }
+
+        Vector2 ClampPointToBoundarySide(Vector2 point, BoundarySide side)
+        {
+            if (side.isVertical)
+                return new Vector2(side.coordinate, Mathf.Clamp(point.y, side.minValue, side.maxValue));
+
+            return new Vector2(Mathf.Clamp(point.x, side.minValue, side.maxValue), side.coordinate);
+        }
+
+        List<BoundarySide> CreateBoundarySides()
+        {
+            // Boundary normals point out of the rectangle.
+            // The axis is perpendicular to the normal and tells later code how the vertex can slide along the edge.
+            float maxX = mapSize.x - 1f;
+            float maxY = mapSize.y - 1f;
+            return new List<BoundarySide>
+            {
+                new BoundarySide(true, 0f, 0f, maxY, new Vector2(-1f, 0f), new Vector2(0f, 1f)),
+                new BoundarySide(true, maxX, 0f, maxY, new Vector2(1f, 0f), new Vector2(0f, 1f)),
+                new BoundarySide(false, 0f, 0f, maxX, new Vector2(0f, -1f), new Vector2(1f, 0f)),
+                new BoundarySide(false, maxY, 0f, maxX, new Vector2(0f, 1f), new Vector2(1f, 0f))
+            };
+        }
+
+        void RebuildTwoSitePolygons(VoronoiSite firstSite, VoronoiSite secondSite)
+        {
+            // With only two sites, the whole diagram is split by one perpendicular bisector.
+            // The two points where that bisector touches the rectangle are the shared boundary vertices.
+            List<VoronoiSite> linkedSites = new List<VoronoiSite> { firstSite, secondSite };
+            List<VoronoiVertex> splitVertices = CreateTwoSiteSplitVertices(firstSite, secondSite, linkedSites);
+
+            for (int i = 0; i < splitVertices.Count; i++)
+            {
+                AddVertexToSite(firstSite, splitVertices[i]);
+                AddVertexToSite(secondSite, splitVertices[i]);
+            }
+
+            AddMapCornersToClosestSites();
+            FinalizeSitePolygons();
+        }
+
+        List<VoronoiVertex> CreateTwoSiteSplitVertices(VoronoiSite firstSite, VoronoiSite secondSite,
+            List<VoronoiSite> linkedSites)
+        {
+            List<VoronoiVertex> splitVertices = new List<VoronoiVertex>();
+            Vector2 firstPosition = GetSiteGridPosition(firstSite);
+            Vector2 secondPosition = GetSiteGridPosition(secondSite);
+            Vector2 midpoint = (firstPosition + secondPosition) * 0.5f;
+            Vector2 siteDirection = secondPosition - firstPosition;
+            Vector2 bisectorDirection = new Vector2(-siteDirection.y, siteDirection.x);
+
+            List<BoundarySide> boundarySides = CreateBoundarySides();
+            for (int i = 0; i < boundarySides.Count; i++)
+            {
+                BoundarySide side = boundarySides[i];
+                Vector2 sideStart = GetBoundarySideStart(side);
+                Vector2 sideEnd = GetBoundarySideEnd(side);
+                if (!TryGetLineIntersection(midpoint, midpoint + bisectorDirection,
+                        sideStart, sideEnd, out Vector2 intersection))
+                    continue;
+
+                if (!IsPointOnBoundarySideSegment(intersection, side))
+                    continue;
+
+                VoronoiVertex splitVertex = GetOrCreateSharedVertex(
+                    ClampPointToBoundarySide(intersection, side),
+                    linkedSites,
+                    true,
+                    side.normal,
+                    side.axis,
+                    true);
+
+                AddVertexIfMissing(splitVertices, splitVertex);
+            }
+
+            return splitVertices;
+        }
+
+        Vector2 GetBoundarySideStart(BoundarySide side)
+        {
+            if (side.isVertical)
+                return new Vector2(side.coordinate, side.minValue);
+
+            return new Vector2(side.minValue, side.coordinate);
+        }
+
+        Vector2 GetBoundarySideEnd(BoundarySide side)
+        {
+            if (side.isVertical)
+                return new Vector2(side.coordinate, side.maxValue);
+
+            return new Vector2(side.maxValue, side.coordinate);
+        }
+
+        void AddMapCornersToClosestSites()
+        {
+            // Rectangle corners are assigned to the nearest site so cells that touch corners draw along the box.
+            // They are not marked as movable edge vertices because a corner belongs to two axes, not one.
+            List<Vector2> mapCorners = CreateMapRectanglePolygon();
+            for (int i = 0; i < mapCorners.Count; i++)
+            {
+                Vector2 corner = mapCorners[i];
+                List<VoronoiSite> linkedSites = CalculateLinkedSitesForVertex(corner);
+                VoronoiVertex cornerVertex = GetOrCreateSharedVertex(
+                    corner,
+                    linkedSites,
+                    false,
+                    Vector2.zero,
+                    Vector2.zero,
+                    true);
+
+                for (int siteIndex = 0; siteIndex < linkedSites.Count; siteIndex++)
+                    AddVertexToSite(linkedSites[siteIndex], cornerVertex);
+            }
+        }
+
+        void FinalizeSitePolygons()
+        {
+            // Every site now has an unordered bag of shared vertices.
+            // Sorting around the site turns that bag into the polygon loop used by drawing and point checks.
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                SortPolygonVertexObjectsAroundSite(validSites[i]);
+                RemoveRepeatedPolygonVertexObjects(validSites[i]);
+                SyncPolygonPositionsFromObjects(validSites[i]);
+            }
+        }
+
+        void SortPolygonVertexObjectsAroundSite(VoronoiSite site)
+        {
+            if (site == null || site.polygonVertexObjects.Count < 2)
+                return;
+
+            Vector2 sitePosition = GetSiteGridPosition(site);
+            site.polygonVertexObjects.Sort((firstVertex, secondVertex) =>
+            {
+                float firstAngle = Mathf.Atan2(firstVertex.pos.y - sitePosition.y, firstVertex.pos.x - sitePosition.x);
+                float secondAngle = Mathf.Atan2(secondVertex.pos.y - sitePosition.y, secondVertex.pos.x - sitePosition.x);
+                if (!Mathf.Approximately(firstAngle, secondAngle))
+                    return firstAngle.CompareTo(secondAngle);
+
+                float firstDistance = (firstVertex.pos - sitePosition).sqrMagnitude;
+                float secondDistance = (secondVertex.pos - sitePosition).sqrMagnitude;
+                return firstDistance.CompareTo(secondDistance);
+            });
+        }
+
+        void RemoveRepeatedPolygonVertexObjects(VoronoiSite site)
+        {
+            if (site == null || site.polygonVertexObjects.Count < 2)
+                return;
+
+            for (int i = site.polygonVertexObjects.Count - 1; i >= 0; i--)
+            {
+                if (site.polygonVertexObjects.Count < 2)
+                    break;
+
+                int previousIndex = i == 0 ? site.polygonVertexObjects.Count - 1 : i - 1;
+                if ((site.polygonVertexObjects[i].pos - site.polygonVertexObjects[previousIndex].pos).sqrMagnitude <= PolygonEpsilon)
+                    site.polygonVertexObjects.RemoveAt(i);
+            }
+        }
+
+        void SyncPolygonPositionsFromObjects(VoronoiSite site)
+        {
+            site.polygonVertices.Clear();
+            for (int i = 0; i < site.polygonVertexObjects.Count; i++)
+                site.polygonVertices.Add(site.polygonVertexObjects[i].pos);
+        }
+
+        bool TryGetLineIntersection(Vector2 firstLineStart, Vector2 firstLineEnd,
+            Vector2 secondLineStart, Vector2 secondLineEnd, out Vector2 intersection)
+        {
+            // The 2D cross-product form solves where two infinite lines meet.
+            // The bounded cases use it to find where a bisector reaches a map edge.
+            intersection = Vector2.zero;
+
+            Vector2 firstDirection = firstLineEnd - firstLineStart;
+            Vector2 secondDirection = secondLineEnd - secondLineStart;
+            float denominator = Cross(firstDirection, secondDirection);
+            if (Mathf.Abs(denominator) <= PolygonEpsilon)
+                return false;
+
+            Vector2 startDifference = secondLineStart - firstLineStart;
+            float firstLinePercent = Cross(startDifference, secondDirection) / denominator;
+            intersection = firstLineStart + firstDirection * firstLinePercent;
+            return true;
+        }
+
+        float Cross(Vector2 firstVector, Vector2 secondVector)
+        {
+            return firstVector.x * secondVector.y - firstVector.y * secondVector.x;
+        }
+
+        void StorePolygonVerticesForSite(VoronoiSite site, List<Vector2> polygon)
+        {
+            site.polygonVertexObjects.Clear();
+            site.polygonVertices.Clear();
+
+            if (polygon == null)
+                return;
+
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                // The shared object is reused by every site that reaches the same point.
+                // The Vector2 mirror is kept so the existing drawing and point-in-polygon code still works.
+                VoronoiVertex vertex = GetOrCreateSharedVertex(
+                    polygon[i],
+                    CalculateLinkedSitesForVertex(polygon[i]),
+                    false,
+                    Vector2.zero,
+                    Vector2.zero,
+                    true);
+                site.polygonVertexObjects.Add(vertex);
+                site.polygonVertices.Add(vertex.pos);
+            }
+        }
+
+        VoronoiVertex GetOrCreateSharedVertex(Vector2 vertexPosition, List<VoronoiSite> linkedSites,
+            bool isBoundingVertex, Vector2 boundaryNormal, Vector2 boundaryAxis, bool clampToMapBounds)
+        {
+            // Boundary and corner vertices are clamped to the rectangle because they must sit on the map edge.
+            // Interior circumcenters keep their true position, except for tiny floating-point drift near a boundary.
+            Vector2 storedPosition = clampToMapBounds
+                ? ClampPointToMapBounds(vertexPosition)
+                : ClampPointToMapBoundsIfNearlyOnBoundary(vertexPosition);
+
+            //Try to find vertex in existing list,
+            //if it exists, add new sites to it and return it
+            for (int i = 0; i < vertices.Count; i++)
+            {
+                if ((vertices[i].pos - storedPosition).sqrMagnitude > PolygonEpsilon)
+                    continue;
+
+                MergeLinkedSites(vertices[i], linkedSites);
+                if (isBoundingVertex)
+                {
+                    vertices[i].touchesMapBoundary = true;
+                    vertices[i].boundaryNormal = boundaryNormal;
+                    vertices[i].boundaryAxis = boundaryAxis;
+                }
+
+                return vertices[i];
+            }
+
+            // Interior Voronoi vertices usually link three sites.
+            // Mirrored boundary vertices link only the two real sites that own the open Delaunay edge.
+            VoronoiVertex newVertex = new VoronoiVertex(
+                RoundToGridPosition(storedPosition),
+                storedPosition,
+                linkedSites,
+                IsPointOnMapBoundary(storedPosition) || isBoundingVertex,
+                boundaryNormal,
+                boundaryAxis);
+
+            vertices.Add(newVertex);
+
+            for (int i = 0; i < linkedSites.Count; i++)
+                AddVertexToSite(linkedSites[i], newVertex);
+            return newVertex;
+        }
+
+        void AddVertexToSite(VoronoiSite site, VoronoiVertex vertex)
+        {
+            if (site == null || vertex == null)
+                return;
+
+            // The same shared object can be reached through multiple triangles in co-circular cases.
+            // Only add it once so sorting does not create zero-length polygon edges.
+            AddVertexIfMissing(site.polygonVertexObjects, vertex);
+        }
+
+        void AddVertexIfMissing(List<VoronoiVertex> vertexList, VoronoiVertex vertex)
+        {
+            if (vertexList == null || vertex == null)
+                return;
+
+            for (int i = 0; i < vertexList.Count; i++)
+            {
+                if ((vertexList[i].pos - vertex.pos).sqrMagnitude <= PolygonEpsilon)
+                    return;
+            }
+
+            vertexList.Add(vertex);
+        }
+
+        void MergeLinkedSites(VoronoiVertex vertex, List<VoronoiSite> linkedSites)
+        {
+            if (vertex == null || linkedSites == null)
+                return;
+
+            for (int i = 0; i < linkedSites.Count; i++)
+            {
+                VoronoiSite linkedSite = linkedSites[i];
+                if (linkedSite == null || vertex.linkedSites.Contains(linkedSite))
+                    continue;
+
+                vertex.linkedSites.Add(linkedSite);
+                
+                if(!linkedSite.polygonVertexObjects.Contains(vertex))
+                    linkedSite.polygonVertexObjects.Add(vertex);
+            }
+        }
+
+        List<VoronoiSite> CalculateLinkedSitesForVertex(Vector2 vertexPosition)
+        {
+            List<VoronoiSite> linkedSites = new List<VoronoiSite>();
+            float nearestDistanceSqr = float.MaxValue;
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                float distanceSqr = (GetSiteGridPosition(validSites[i]) - vertexPosition).sqrMagnitude;
+                nearestDistanceSqr = Mathf.Min(nearestDistanceSqr, distanceSqr);
+            }
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                float distanceSqr = (GetSiteGridPosition(validSites[i]) - vertexPosition).sqrMagnitude;
+                if (Mathf.Abs(distanceSqr - nearestDistanceSqr) <= DistanceTieEpsilon)
+                    linkedSites.Add(validSites[i]);
+            }
+
+            return linkedSites;
+        }
+
+        Vector2 ClampPointToMapBounds(Vector2 point)
+        {
+            float maxX = mapSize.x - 1f;
+            float maxY = mapSize.y - 1f;
+            return new Vector2(
+                Mathf.Clamp(point.x, 0f, maxX),
+                Mathf.Clamp(point.y, 0f, maxY));
+        }
+
+        Vector2 ClampPointToMapBoundsIfNearlyOnBoundary(Vector2 point)
+        {
+            // Circumcenters can land a tiny fraction outside the rectangle from float math.
+            // Only snap those near misses so real outside circumcenters keep their Delaunay-dual position.
+            float maxX = mapSize.x - 1f;
+            float maxY = mapSize.y - 1f;
+            float clampedX = point.x;
+            float clampedY = point.y;
+
+            if (Mathf.Abs(point.x) <= DistanceTieEpsilon)
+                clampedX = 0f;
+            else if (Mathf.Abs(point.x - maxX) <= DistanceTieEpsilon)
+                clampedX = maxX;
+
+            if (Mathf.Abs(point.y) <= DistanceTieEpsilon)
+                clampedY = 0f;
+            else if (Mathf.Abs(point.y - maxY) <= DistanceTieEpsilon)
+                clampedY = maxY;
+
+            return new Vector2(clampedX, clampedY);
+        }
+
+        bool IsPointOnMapBoundary(Vector2 point)
+        {
+            float maxX = mapSize.x - 1f;
+            float maxY = mapSize.y - 1f;
+            return Mathf.Abs(point.x) <= PolygonEpsilon ||
+                   Mathf.Abs(point.y) <= PolygonEpsilon ||
+                   Mathf.Abs(point.x - maxX) <= PolygonEpsilon ||
+                   Mathf.Abs(point.y - maxY) <= PolygonEpsilon;
         }
 
         List<Vector2> CreateMapRectanglePolygon()
         {
-            // The map rectangle is used when a single site owns the whole map,
-            // and also as temporary support when a sparse midpoint set cannot close a polygon.
+            // The map rectangle is used for the one-site case and for assigning corner ownership.
+            // Multi-site polygons are now built from Delaunay circumcenters and boundary support vertices.
             float maxX = mapSize.x - 1;
             float maxY = mapSize.y - 1;
 
@@ -278,51 +995,6 @@ namespace IA.Pathfinding.Voronoi
                 new Vector2(maxX, maxY),
                 new Vector2(0f, maxY)
             };
-        }
-
-        void AddBoundaryVertices(VoronoiSite site, List<Vector2> polygon, List<Vector2> availableMapCorners)
-        {
-            if (site == null || polygon == null)
-                return;
-
-            if (availableMapCorners != null)
-            {
-                List<Vector2> cornersToCheck = new List<Vector2>(availableMapCorners);
-                for (int i = 0; i < cornersToCheck.Count; i++)
-                {
-                    Vector2 corner = cornersToCheck[i];
-                    if (!IsBoundaryPointValidByRadius(site, corner))
-                        continue;
-
-                    polygon.Add(corner);
-
-                    availableMapCorners.RemoveAt(i);
-                }
-            }
-
-            Vector2 closestMapLimit = GetClosestMapLimitProjection(site);
-            if (IsBoundaryPointValidByRadius(site, closestMapLimit) &&
-                !ContainsVertex(polygon, closestMapLimit))
-                polygon.Add(closestMapLimit);
-        }
-
-        void SortPolygonVerticesAroundSite(VoronoiSite site, List<Vector2> polygon)
-        {
-            if (polygon == null || polygon.Count < 2)
-                return;
-
-            Vector2 sitePosition = GetSiteGridPosition(site);
-            polygon.Sort((firstVertex, secondVertex) =>
-            {
-                float firstAngle = Mathf.Atan2(firstVertex.y - sitePosition.y, firstVertex.x - sitePosition.x);
-                float secondAngle = Mathf.Atan2(secondVertex.y - sitePosition.y, secondVertex.x - sitePosition.x);
-                if (!Mathf.Approximately(firstAngle, secondAngle))
-                    return firstAngle.CompareTo(secondAngle);
-
-                float firstDistance = (firstVertex - sitePosition).sqrMagnitude;
-                float secondDistance = (secondVertex - sitePosition).sqrMagnitude;
-                return firstDistance.CompareTo(secondDistance);
-            });
         }
 
         bool IsPointInsidePolygon(Vector2 point, List<Vector2> polygonVertices)
@@ -372,103 +1044,6 @@ namespace IA.Pathfinding.Voronoi
             return dot <= segment.sqrMagnitude + PolygonEpsilon;
         }
 
-        void EnsureMidpointBetweenSites(VoronoiSite firstSite, VoronoiSite secondSite)
-        {
-            if (firstSite.HasMidpoint(secondSite))
-                return;
-
-            VoronoiMidpoint midpoint = CalculateMidpointBetweenSites(firstSite, secondSite);
-            firstSite.AddMidpoint(secondSite, midpoint);
-        }
-
-        void RemoveInvalidMidpoints()
-        {
-            HashSet<VoronoiMidpoint> checkedMidpoints = new HashSet<VoronoiMidpoint>();
-
-            for (int i = 0; i < validSites.Count; i++)
-                RemoveInvalidMidpointsForSite(validSites[i], checkedMidpoints);
-        }
-
-        /// <summary>
-        /// Runs through all midpoints of the site
-        /// If any midpoint has another site in its radius, it is invalid and is removed
-        /// </summary>
-        /// <param name="site"></param>
-        /// <param name="checkedMidpoints">OPTIONAL:
-        /// hashset of midpoints that were already checked and approved,
-        /// so they can be skipped</param>
-        void RemoveInvalidMidpointsForSite(VoronoiSite site, HashSet<VoronoiMidpoint> checkedMidpoints = null)
-        {
-            if (site == null)
-                return;
-
-            HashSet<VoronoiSite> invalidOtherSites = new HashSet<VoronoiSite>();
-            List<VoronoiSite> linkedSites = new List<VoronoiSite>(site.midpointsByOtherSite.Keys);
-
-            // Partial recalculation intentionally stays local to the changed site.
-            // Full rebuilds pass a shared hash set so the same linked midpoint is only validated once.
-            for (int i = 0; i < linkedSites.Count; i++)
-            {
-                VoronoiSite otherSite = linkedSites[i];
-                if (!site.TryGetMidpoint(otherSite, out VoronoiMidpoint midpoint))
-                    continue;
-
-                if (checkedMidpoints != null && !checkedMidpoints.Add(midpoint))
-                    continue;
-
-                if (!IsMidpointValidByEuclideanRadius(midpoint))
-                    invalidOtherSites.Add(otherSite);
-            }
-
-            foreach (VoronoiSite invalidSite in invalidOtherSites)
-                site.RemoveMidpoint(invalidSite);
-        }
-
-        bool IsMidpointValidByEuclideanRadius(VoronoiMidpoint midpoint)
-        {
-            if (midpoint == null)
-                return false;
-
-            for (int i = 0; i < validSites.Count; i++)
-            {
-                VoronoiSite site = validSites[i];
-                if (site == midpoint.siteA || site == midpoint.siteB)
-                    continue;
-
-                //If any other site besides the parents are inside the radius,
-                //the midpoint is not valid, as there is a closer site in direction
-                Vector2 sitePosition = GetSiteGridPosition(site);
-                float distanceToMidpointSqr = (sitePosition - midpoint.pos).sqrMagnitude;
-                if (distanceToMidpointSqr < midpoint.sqrRadius - PolygonEpsilon)
-                    return false;
-            }
-
-            return true;
-        }
-
-        bool IsBoundaryPointValidByRadius(VoronoiSite ownerSite, Vector2 point)
-        {
-            if (ownerSite == null)
-                return false;
-
-            Vector2 ownerSitePosition = GetSiteGridPosition(ownerSite);
-            float pointRadiusSqr = (ownerSitePosition - point).sqrMagnitude;
-
-            for (int i = 0; i < validSites.Count; i++)
-            {
-                VoronoiSite otherSite = validSites[i];
-                if (otherSite == ownerSite)
-                    continue;
-
-                Vector2 otherSitePos = GetSiteGridPosition(otherSite);
-                float distanceToPointSqr = (otherSitePos - point).sqrMagnitude;
-                if (distanceToPointSqr < pointRadiusSqr - PolygonEpsilon)
-                    return false;
-            }
-
-            return true;
-        }
-
         void CacheClosestSiteOnNode(PathNode node, Vector2Int closestSiteGridPosition)
         {
             node.hasClosestVoronoiSite = true;
@@ -516,50 +1091,6 @@ namespace IA.Pathfinding.Voronoi
         Vector2 GetSiteGridPosition(VoronoiSite site) 
             => new(site.gridPos.x, site.gridPos.y);
 
-        Vector2 GetClosestMapLimitProjection(VoronoiSite site)
-        {
-            Vector2 pos = GetSiteGridPosition(site);
-            float maxX = mapSize.x - 1f;
-            float maxY = mapSize.y - 1f;
-
-            // Check if site is closer to left limit or right limit
-            float distToRight = maxX - pos.x;
-            float minHorDist;
-            float horEdge;
-            //if right is closer than left, save dist to max as min hor dist
-            if (distToRight < pos.x) 
-            {
-                minHorDist = distToRight;
-                horEdge = maxX;
-            }
-            else //if left closer is, save pos (dist to 0) as hor dist
-            {
-                minHorDist = pos.x;
-                horEdge = 0f;
-            }
-
-            // Check if site is closer to bottom limit or top limit
-            float distToTop = maxY - pos.y;
-            float minVerDist;
-            float verEdge;
-            if (distToTop < pos.y) //if top is closer than bottom
-            {
-                minVerDist = distToTop;
-                verEdge = maxY;
-            }
-            else //if bottom is closer
-            {
-                minVerDist = pos.y;
-                verEdge = 0f;
-            }
-
-            // if vertical distance is smaller, use the vertical edge
-            if (minVerDist < minHorDist)
-                return new Vector2(pos.x, verEdge);
-
-            return new Vector2(horEdge, pos.y);
-        }
-
         float GetSquaredEuclideanDistance(Vector2Int firstGridPosition, Vector2Int secondGridPosition)
         {
             // Squared distance keeps the same ordering as Euclidean distance.
@@ -568,20 +1099,222 @@ namespace IA.Pathfinding.Voronoi
             return difference.x * difference.x + difference.y * difference.y;
         }
 
-        bool ContainsVertex(List<Vector2> vertices, Vector2 candidateVertex)
+        class BoundarySide
         {
-            // Vertices are floats, so exact equality is too strict.
-            // A tiny epsilon treats points in the same place as duplicates.
-            if (vertices == null)
-                return false;
+            public bool isVertical;
+            public float coordinate;
+            public float minValue;
+            public float maxValue;
+            public Vector2 normal;
+            public Vector2 axis;
 
-            for (int i = 0; i < vertices.Count; i++)
+            public BoundarySide(bool isVertical, float coordinate, float minValue, float maxValue,
+                Vector2 normal, Vector2 axis)
             {
-                if ((vertices[i] - candidateVertex).sqrMagnitude <= PolygonEpsilon)
+                this.isVertical = isVertical;
+                this.coordinate = coordinate;
+                this.minValue = minValue;
+                this.maxValue = maxValue;
+                this.normal = normal;
+                this.axis = axis;
+            }
+        }
+
+        class DelaunayEdgeUse
+        {
+            public DelaunayEdge edge;
+            public DelaunayTriangle triangle;
+            public int useCount;
+
+            public DelaunayEdgeUse(DelaunayEdge edge, DelaunayTriangle triangle)
+            {
+                this.edge = edge;
+                this.triangle = triangle;
+                useCount = 1;
+            }
+        }
+
+        class DelaunayEdge
+        {
+            public Vector2 posA;
+            public Vector2 posB;
+            public VoronoiSite siteA;
+            public VoronoiSite siteB;
+
+            public DelaunayEdge(Vector2 posA, Vector2 posB, VoronoiSite siteA, VoronoiSite siteB)
+            {
+                this.posA = posA;
+                this.posB = posB;
+                this.siteA = siteA;
+                this.siteB = siteB;
+            }
+            
+            public bool IsSameEdge(DelaunayEdge other)
+            {
+                if (other == null)
+                    return false;
+                
+                //If they are the same exact vector, return true
+                if (AreSamePoint(posA, other.posA) && AreSamePoint(posB, other.posB))
                     return true;
+                
+                //If they are the opposite vector of each other, also return true
+                //If not, they really are different edges
+                return AreSamePoint(posA, other.posB) && AreSamePoint(posB, other.posA);
             }
 
-            return false;
+            static bool AreSamePoint(Vector2 firstPoint, Vector2 secondPoint) 
+                => (firstPoint - secondPoint).sqrMagnitude <= PolygonEpsilon;
+        }
+
+        class DelaunayTriangle
+        {
+            public Vector2 posA;
+            public Vector2 posB;
+            public Vector2 posC;
+            public VoronoiSite siteA;
+            public VoronoiSite siteB;
+            public VoronoiSite siteC;
+
+            public DelaunayTriangle(Vector2 posA, Vector2 posB, Vector2 posC,
+                VoronoiSite siteA, VoronoiSite siteB, VoronoiSite siteC)
+            {
+                this.posA = posA;
+                this.posB = posB;
+                this.posC = posC;
+                this.siteA = siteA;
+                this.siteB = siteB;
+                this.siteC = siteC;
+            }
+
+            public List<DelaunayEdge> GetEdges()
+            {
+                // Each Delaunay triangle has three site-to-site edges.
+                // Those edges later tell us which Voronoi edges are shared and which ones are open.
+                return new List<DelaunayEdge>
+                {
+                    new DelaunayEdge(posA, posB, siteA, siteB),
+                    new DelaunayEdge(posB, posC, siteB, siteC),
+                    new DelaunayEdge(posC, posA, siteC, siteA)
+                };
+            }
+
+            public bool HasEdge(DelaunayEdge edge)
+            {
+                List<DelaunayEdge> edges = GetEdges();
+                for (int i = 0; i < edges.Count; i++)
+                {
+                    if (edges[i].IsSameEdge(edge))
+                        return true;
+                }
+
+                return false;
+            }
+
+            public bool HasSuperVertex()
+            {
+                return siteA == null || siteB == null || siteC == null;
+            }
+
+            public List<VoronoiSite> GetSites()
+            {
+                // The triangle stores both positions and optional site references.
+                // Only real site references become Voronoi vertex parents.
+                List<VoronoiSite> sites = new List<VoronoiSite>();
+                if (siteA != null) sites.Add(siteA);
+                if (siteB != null) sites.Add(siteB);
+                if (siteC != null) sites.Add(siteC);
+                return sites;
+            }
+
+            public bool TryGetSiteOutsideEdge(DelaunayEdge edge, out VoronoiSite outsideSite)
+            {
+                outsideSite = null;
+                if (edge == null)
+                    return false;
+
+                // The outside site is the third corner of the triangle,
+                // meaning the one that is not part of the tested Delaunay edge.
+                if (siteA != edge.siteA && siteA != edge.siteB)
+                    outsideSite = siteA;
+                else if (siteB != edge.siteA && siteB != edge.siteB)
+                    outsideSite = siteB;
+                else if (siteC != edge.siteA && siteC != edge.siteB)
+                    outsideSite = siteC;
+
+                return outsideSite != null;
+            }
+
+            public bool IsTooSmall()
+            {
+                //If cross product is near 0, it means the vectors are almost parallel,
+                //so the triangle does not work
+                float cross = Cross(posB - posA, posC - posA);
+                return cross * cross <= PolygonEpsilon;
+            }
+
+            public bool CircumcircleContains(Vector2 point)
+            {
+                Vector2 center = GetCircumcenter();
+                double radiusSqr = (posA - center).sqrMagnitude;
+                double pointDistanceSqr = (point - center).sqrMagnitude;
+                return pointDistanceSqr <= radiusSqr + DistanceTieEpsilon;
+            }
+
+            /// <summary>
+            /// Get the center of the circle formed by the 3 points
+            /// If it fails, returns the center of the triangle
+            /// </summary>
+            /// <returns></returns>
+            public Vector2 GetCircumcenter()
+            {
+                double aX = posA.x;
+                double aY = posA.y;
+                double bX = posB.x;
+                double bY = posB.y;
+                double cX = posC.x;
+                double cY = posC.y;
+
+                // We calculate the triangle area
+                double triangleArea = 2.0 * (
+                    aX * (bY - cY) +
+                    bX * (cY - aY) +
+                    cX * (aY - bY));
+
+                //We can't divide by zero,
+                //so if the triangle is flat, use avg as backup
+                if (triangleArea >= -Mathf.Epsilon
+                    && triangleArea <= Mathf.Epsilon)
+                {
+                    double averageX = (aX + bX + cX) / 3.0;
+                    double averageY = (aY + bY + cY) / 3.0;
+                    return new Vector2((float)averageX, (float)averageY);
+                }
+
+                //Get sqr distances from origin (sqr position)
+                double aSqrDistFromOrigin = aX * aX + aY * aY;
+                double bSqrDistFromOrigin = bX * bX + bY * bY;
+                double cSqrDistFromOrigin = cX * cX + cY * cY;
+
+                // Use perpendicular lines to get X
+                double circumcenterX = 
+                (aSqrDistFromOrigin * (bY - cY) +
+                 bSqrDistFromOrigin * (cY - aY) +
+                 cSqrDistFromOrigin * (aY - bY)) / triangleArea;
+
+                //Use perpendicular lines to get Y
+                double circumcenterY = (
+                    aSqrDistFromOrigin * (cX - bX) +
+                    bSqrDistFromOrigin * (aX - cX) +
+                    cSqrDistFromOrigin * (bX - aX)) / triangleArea;
+
+                return new Vector2((float)circumcenterX, (float)circumcenterY);
+            }
+
+            static float Cross(Vector2 firstVector, Vector2 secondVector)
+            {
+                return firstVector.x * secondVector.y - firstVector.y * secondVector.x;
+            }
         }
 
     }

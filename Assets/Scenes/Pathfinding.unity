@@ -451,13 +451,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   points: {x: 600, y: 600}
   pointsOfInterest:
-  - p: {x: 0.41, y: 0.13}
   - p: {x: 0.1, y: 0.7}
-  - p: {x: 0.8, y: 0.29}
+  - p: {x: 0.17, y: 0.1}
+  - p: {x: 0.172, y: 0.1}
+  - p: {x: 0.41, y: 0.13}
   - p: {x: 0.5, y: 0.5}
   - p: {x: 0.6, y: 0.91}
-  - p: {x: 0.2, y: 0.1}
-  - p: {x: 0.17, y: 0.1}
+  - p: {x: 0.8, y: 0.29}
   img: {fileID: 185035021}
   colors:
   - {r: 1, g: 0, b: 0, a: 1}
