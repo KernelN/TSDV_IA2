@@ -183,6 +183,10 @@ namespace IA.Pathfinding.Voronoi
             // This keeps the update small, even though a full rebuild is the only way to refresh every global radius test.
             RemoveInvalidMidpointsForSite(changedSite);
 
+            // Terrain movement is applied only after the invalid midpoint pairs were removed.
+            // This keeps blocked cells and heavy cells from rescuing a midpoint that already failed the geometric test.
+            ApplyTerrainWeightsToValidMidpoints(changedSite);
+
             // Corner ownership is shared across the whole diagram, so polygon support must
             // be rebuilt in one deterministic pass even when midpoint edits were local.
             RebuildSitePolygons();
@@ -213,6 +217,10 @@ namespace IA.Pathfinding.Voronoi
             }
 
             RemoveInvalidMidpoints();
+
+            // Terrain movement is applied after all midpoint pairs have passed the Euclidean radius test.
+            // The polygon builder can then use the final, terrain-adjusted midpoint positions.
+            ApplyTerrainWeightsToValidMidpoints();
 
             // The temporary polygon is assembled from valid midpoint positions.
             // The later vertex stage will replace this with shared vertices and terrain movement.
@@ -444,6 +452,262 @@ namespace IA.Pathfinding.Voronoi
             }
 
             return true;
+        }
+
+        void ApplyTerrainWeightsToValidMidpoints(VoronoiSite singleSite = null)
+        {
+            if (nodeGrid == null)
+                return;
+
+            HashSet<VoronoiMidpoint> checkedMidpoints = new HashSet<VoronoiMidpoint>();
+
+            // A partial update passes one site, while a full rebuild walks every valid site.
+            // In both cases the hash set keeps a shared midpoint from being moved twice.
+            if (singleSite != null)
+            {
+                foreach (VoronoiMidpoint midpoint in singleSite.midpointsByOtherSite.Values)
+                {
+                    if (midpoint == null || !checkedMidpoints.Add(midpoint))
+                        continue;
+
+                    ApplyTerrainShiftToMidpoint(midpoint);
+                }
+
+                return;
+            }
+
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site = validSites[i];
+                foreach (VoronoiMidpoint midpoint in site.midpointsByOtherSite.Values)
+                {
+                    if (midpoint == null || !checkedMidpoints.Add(midpoint))
+                        continue;
+
+                    ApplyTerrainShiftToMidpoint(midpoint);
+                }
+            }
+        }
+
+        void ApplyTerrainShiftToMidpoint(VoronoiMidpoint midpoint)
+        {
+            if (midpoint == null || midpoint.siteA == null || midpoint.siteB == null)
+                return;
+
+            List<Vector2Int> lineCells = GetGridLineCellsBetweenSites(midpoint.siteA, midpoint.siteB);
+            if (lineCells.Count == 0)
+                return;
+
+            int siteAIndex = 0;
+            int siteBIndex = lineCells.Count - 1;
+            int midpointIndex = lineCells.Count / 2;
+
+            // The first pass looks only at blocked cells.
+            // More blocked cells on one side means that side should receive less Voronoi space.
+            int siteAUnwalkableCount = CountUnwalkableCellsBetweenIndexes(lineCells, siteAIndex, midpointIndex);
+            int siteBUnwalkableCount = CountUnwalkableCellsBetweenIndexes(lineCells, siteBIndex, midpointIndex);
+            int unwalkableDifference = siteAUnwalkableCount - siteBUnwalkableCount;
+
+            if (unwalkableDifference > 0)
+                midpointIndex = MoveIndexTowardsTarget(midpointIndex, siteAIndex, unwalkableDifference);
+            else if (unwalkableDifference < 0)
+                midpointIndex = MoveIndexTowardsTarget(midpointIndex, siteBIndex, -unwalkableDifference);
+
+            // The second pass looks only at walkable terrain weights.
+            // Unwalkable cells are skipped here because they already had their own movement pass.
+            float siteAAverageWeight = GetAverageWalkableWeightBetweenIndexes(lineCells, siteAIndex, midpointIndex,
+                out int siteAWalkableCellCount);
+            float siteBAverageWeight = GetAverageWalkableWeightBetweenIndexes(lineCells, siteBIndex, midpointIndex,
+                out int siteBWalkableCellCount);
+            float averageWeightDifference = siteAAverageWeight - siteBAverageWeight;
+
+            if (!Mathf.Approximately(averageWeightDifference, 0f))
+            {
+                bool siteAHasHigherWeight = averageWeightDifference > 0f;
+                int heavierSideCellCount = siteAHasHigherWeight ? siteAWalkableCellCount : siteBWalkableCellCount;
+                int weightMovement = heavierSideCellCount > 0
+                    ? Mathf.RoundToInt(Mathf.Abs(averageWeightDifference) / heavierSideCellCount)
+                    : 0;
+
+                if (weightMovement > 0)
+                {
+                    int targetIndex = siteAHasHigherWeight ? siteAIndex : siteBIndex;
+                    midpointIndex = MoveIndexTowardsTarget(midpointIndex, targetIndex, weightMovement);
+                }
+            }
+
+            midpointIndex = Mathf.Clamp(midpointIndex, 0, lineCells.Count - 1);
+            Vector2Int movedGridPosition = lineCells[midpointIndex];
+
+            // The selected grid cell becomes the stored midpoint position used by the polygon builder.
+            // The original radius stays unchanged because radius validation happened before terrain movement.
+            midpoint.gridPos = movedGridPosition;
+            midpoint.pos = new Vector2(movedGridPosition.x, movedGridPosition.y);
+        }
+
+        List<Vector2Int> GetGridLineCellsBetweenSites(VoronoiSite siteA, VoronoiSite siteB)
+        {
+            List<Vector2Int> lineCells = new List<Vector2Int>();
+            if (siteA == null || siteB == null)
+                return lineCells;
+
+            Vector2Int startCell = ClampGridPosition(siteA.gridPos);
+            Vector2Int endCell = ClampGridPosition(siteB.gridPos);
+            Vector2Int displacement = endCell - startCell;
+            int xDistance = Mathf.Abs(displacement.x);
+            int yDistance = Mathf.Abs(displacement.y);
+
+            // When both sites are on the same cell, the line is just that one cell.
+            // This avoids division or accumulator logic for a line with no length.
+            if (xDistance == 0 && yDistance == 0)
+            {
+                AddGridLineCellIfValid(lineCells, startCell);
+                return lineCells;
+            }
+
+            AddGridLineCellIfValid(lineCells, startCell);
+
+            // This is a DDA-style walk over the dominant axis.
+            // The larger movement advances every loop, and the smaller movement advances when its accumulator fills up.
+            if (xDistance >= yDistance)
+            {
+                int xStep = GetStepSign(displacement.x);
+                int yStep = GetStepSign(displacement.y);
+                int currentX = startCell.x;
+                int currentY = startCell.y;
+                int yAccumulator = 0;
+
+                for (int step = 0; step < xDistance; step++)
+                {
+                    currentX += xStep;
+                    yAccumulator += yDistance;
+
+                    if (yAccumulator >= xDistance)
+                    {
+                        currentY += yStep;
+                        yAccumulator -= xDistance;
+                    }
+
+                    AddGridLineCellIfValid(lineCells, new Vector2Int(currentX, currentY));
+                }
+            }
+            else
+            {
+                int xStep = GetStepSign(displacement.x);
+                int yStep = GetStepSign(displacement.y);
+                int currentX = startCell.x;
+                int currentY = startCell.y;
+                int xAccumulator = 0;
+
+                for (int step = 0; step < yDistance; step++)
+                {
+                    currentY += yStep;
+                    xAccumulator += xDistance;
+
+                    if (xAccumulator >= yDistance)
+                    {
+                        currentX += xStep;
+                        xAccumulator -= yDistance;
+                    }
+
+                    AddGridLineCellIfValid(lineCells, new Vector2Int(currentX, currentY));
+                }
+            }
+
+            return lineCells;
+        }
+
+        int CountUnwalkableCellsBetweenIndexes(List<Vector2Int> lineCells, int fromIndex, int midpointIndex)
+        {
+            if (lineCells == null || lineCells.Count == 0)
+                return 0;
+
+            int unwalkableCount = 0;
+            int stepDirection = GetStepSign(midpointIndex - fromIndex);
+
+            // The midpoint cell is skipped because it belongs to neither side during comparison.
+            // Counting only the cells between the site and midpoint keeps both sides symmetrical.
+            for (int index = fromIndex; index != midpointIndex; index += stepDirection)
+            {
+                PathNode node = GetNodeAtGridPosition(lineCells[index]);
+                if (node == null || !node.walkable)
+                    unwalkableCount++;
+            }
+
+            return unwalkableCount;
+        }
+
+        float GetAverageWalkableWeightBetweenIndexes(List<Vector2Int> lineCells, int fromIndex, int midpointIndex,
+            out int walkableCellCount)
+        {
+            walkableCellCount = 0;
+            if (lineCells == null || lineCells.Count == 0)
+                return 0f;
+
+            int totalWeight = 0;
+            int stepDirection = GetStepSign(midpointIndex - fromIndex);
+
+            // The midpoint is skipped for the same reason as the unwalkable pass.
+            // Only walkable cells add weight, because blocked cells already moved the midpoint in the first pass.
+            for (int index = fromIndex; index != midpointIndex; index += stepDirection)
+            {
+                PathNode node = GetNodeAtGridPosition(lineCells[index]);
+                if (node == null || !node.walkable)
+                    continue;
+
+                totalWeight += node.weight;
+                walkableCellCount++;
+            }
+
+            if (walkableCellCount == 0)
+                return 0f;
+
+            return (float)totalWeight / walkableCellCount;
+        }
+
+        int MoveIndexTowardsTarget(int currentIndex, int targetIndex, int amount)
+        {
+            if (amount <= 0 || currentIndex == targetIndex)
+                return currentIndex;
+
+            int direction = GetStepSign(targetIndex - currentIndex);
+            int movedIndex = currentIndex + direction * amount;
+
+            // The moved index must stay between the old midpoint and the site it is moving toward.
+            // Min and max make the clamp work the same way from left-to-right and right-to-left.
+            int minIndex = Mathf.Min(currentIndex, targetIndex);
+            int maxIndex = Mathf.Max(currentIndex, targetIndex);
+            return Mathf.Clamp(movedIndex, minIndex, maxIndex);
+        }
+
+        int GetStepSign(int value)
+        {
+            if (value > 0)
+                return 1;
+
+            if (value < 0)
+                return -1;
+
+            return 0;
+        }
+
+        PathNode GetNodeAtGridPosition(Vector2Int gridPosition)
+        {
+            if (!IsGridPositionValid(gridPosition))
+                return null;
+
+            return nodeGrid[gridPosition.x, gridPosition.y];
+        }
+
+        void AddGridLineCellIfValid(List<Vector2Int> lineCells, Vector2Int gridPosition)
+        {
+            if (lineCells == null || !IsGridPositionValid(gridPosition))
+                return;
+
+            if (lineCells.Count > 0 && lineCells[lineCells.Count - 1] == gridPosition)
+                return;
+
+            lineCells.Add(gridPosition);
         }
 
         bool IsBoundaryPointValidByRadius(VoronoiSite ownerSite, Vector2 point)

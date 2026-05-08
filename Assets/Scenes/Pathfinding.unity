@@ -139,7 +139,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &139318367
 Transform:
   m_ObjectHideFlags: 0
@@ -158,7 +158,7 @@ Transform:
   - {fileID: 182339972}
   - {fileID: 1626825142}
   m_Father: {fileID: 0}
-  m_RootOrder: 3
+  m_RootOrder: 4
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &139318368
 MonoBehaviour:
@@ -173,7 +173,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gridTransform: {fileID: 1413446046}
-  gridWorldSize: {x: 100, y: 100}
+  gridWorldSize: {x: 30, y: 30}
   grids:
   - unwalkableMask:
       serializedVersion: 2
@@ -227,7 +227,7 @@ MonoBehaviour:
   useSavedData: 0
   saveData: 0
   minePrefab: {fileID: 3390472241950091475, guid: 7cc5e9c857290fc47af95fddb553c4d3, type: 3}
-  mineCount: 30
+  mineCount: 7
   mineSettings:
     minerals: 60
     initialFood: 15
@@ -492,7 +492,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &232404439
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -934,7 +934,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 4
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!65 &642988621
 BoxCollider:
@@ -1083,10 +1083,10 @@ RectTransform:
   m_Father: {fileID: 1351309808}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 59.65216, y: -18.99625}
-  m_SizeDelta: {x: 119.30432, y: 37.9925}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 37.9925}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &676981608
 MonoBehaviour:
@@ -1217,10 +1217,10 @@ RectTransform:
   m_Father: {fileID: 1351309808}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 59.65216, y: -56.98875}
-  m_SizeDelta: {x: 119.30432, y: 37.9925}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 37.9925}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &788989293
 MonoBehaviour:
@@ -1387,10 +1387,10 @@ RectTransform:
   m_Father: {fileID: 1351309808}
   m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 59.65216, y: -132.97375}
-  m_SizeDelta: {x: 119.30432, y: 37.9925}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 37.9925}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &794027615
 MonoBehaviour:
@@ -1914,7 +1914,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1009137511
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2730,10 +2730,10 @@ RectTransform:
   m_Father: {fileID: 1351309808}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 59.65216, y: -94.98125}
-  m_SizeDelta: {x: 119.30432, y: 37.9925}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 37.9925}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1527042190
 MonoBehaviour:
@@ -2847,7 +2847,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1561650525
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3345,7 +3345,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &2142637358
 MonoBehaviour:
   m_ObjectHideFlags: 0
