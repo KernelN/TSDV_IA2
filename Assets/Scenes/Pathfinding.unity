@@ -173,7 +173,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gridTransform: {fileID: 1413446046}
-  gridWorldSize: {x: 30, y: 30}
+  gridWorldSize: {x: 100, y: 100}
   grids:
   - unwalkableMask:
       serializedVersion: 2
@@ -188,9 +188,8 @@ MonoBehaviour:
         serializedVersion: 2
         m_Bits: 256
       weight: 0
-    player: {fileID: 0}
-    maxNodeWeight: 25
-    nodeHeight: 0.05
+    maxNodeWeight: 100
+    nodeHeight: 0.5
   - unwalkableMask:
       serializedVersion: 2
       m_Bits: 64
@@ -204,11 +203,12 @@ MonoBehaviour:
         serializedVersion: 2
         m_Bits: 256
       weight: 0
-    player: {fileID: 0}
-    maxNodeWeight: 25
-    nodeHeight: 0.05
+    maxNodeWeight: 100
+    nodeHeight: 0.5
   pathfinders:
-  - nodeHeight: 0.02
+  - nodeHeight: 0.5
+    maxGizmoCellsPerTick: 500
+    pointGizmoSphereRadius: 1
     possibleRegionColors:
     - {r: 0.9797268, g: 0, b: 1, a: 0.4392157}
     - {r: 0, g: 0.8048496, b: 1, a: 0.4392157}
@@ -216,7 +216,9 @@ MonoBehaviour:
     - {r: 0.35169458, g: 0, b: 1, a: 0.4392157}
     - {r: 0.31248856, g: 1, b: 0, a: 0.4392157}
     - {r: 1, g: 0.3872052, b: 0, a: 0.4392157}
-  - nodeHeight: 0.02
+  - nodeHeight: 0.5
+    maxGizmoCellsPerTick: 100
+    pointGizmoSphereRadius: 1
     possibleRegionColors:
     - {r: 0.9797268, g: 0, b: 1, a: 0.4392157}
     - {r: 0, g: 0.8048496, b: 1, a: 0.4392157}
@@ -227,11 +229,10 @@ MonoBehaviour:
   useSavedData: 0
   saveData: 0
   minePrefab: {fileID: 3390472241950091475, guid: 7cc5e9c857290fc47af95fddb553c4d3, type: 3}
-  mineCount: 7
+  mineCount: 10
   mineSettings:
     minerals: 60
     initialFood: 15
-  terrainRecalcMaxDuration: 0.1
   gizmosIndex: 0
 --- !u!1 &161096330
 GameObject:
@@ -2579,7 +2580,7 @@ Transform:
   m_GameObject: {fileID: 1413446042}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 25, y: 1, z: 25}
+  m_LocalScale: {x: 600, y: 1, z: 600}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 139318367}

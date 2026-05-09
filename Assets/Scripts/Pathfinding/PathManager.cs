@@ -33,10 +33,6 @@ namespace IA.Pathfinding
         //Grid
         public Grid.PathNode[,] grid;
 
-        //Pathfinder
-        public List<SerializableKeyValue<Vec2Int, List<SerializableKeyValue<int, float>>>>
-            regionsCostByNode;
-
         //Mine data
         public List<int> mineIDs;
         public MineSettings mineSettings;
@@ -49,68 +45,6 @@ namespace IA.Pathfinding
 
         //LayerData values
         public bool isSetted;
-
-        public Dictionary<Vector2Int, Dictionary<int, float>> GetDictionary()
-        {
-            Dictionary<Vector2Int, Dictionary<int, float>> dictionary;
-            dictionary = new Dictionary<Vector2Int, Dictionary<int, float>>();
-
-            if (regionsCostByNode == null) return dictionary;
-
-            for (int i = 0; i < regionsCostByNode.Count; i++)
-            {
-                SerializableKeyValue<Vec2Int, List<SerializableKeyValue<int, float>>> costsByPos;
-                costsByPos = regionsCostByNode[i];
-
-                Dictionary<int, float> costs;
-                costs = new Dictionary<int, float>();
-                for (int j = 0; j < costsByPos.value.Count; j++)
-                {
-                    costs.TryAdd(costsByPos.value[j].key, costsByPos.value[j].value);
-                }
-
-                dictionary.TryAdd(costsByPos.key, costs);
-            }
-
-            return dictionary;
-        }
-
-        public void SetDictionary(Dictionary<Vector2Int, Dictionary<int, float>> dictionary)
-        {
-            regionsCostByNode = new List<SerializableKeyValue<Vec2Int,
-                List<SerializableKeyValue<int, float>>>>();
-
-            if (dictionary == null) return;
-
-            //Get all keys
-            foreach (Vector2Int key in dictionary.Keys)
-            {
-                SerializableKeyValue<Vec2Int, List<SerializableKeyValue<int, float>>> costsByPos;
-                costsByPos = new SerializableKeyValue<Vec2Int, List<SerializableKeyValue<int, float>>>();
-                costsByPos.key = key;
-                costsByPos.value = new List<SerializableKeyValue<int, float>>();
-                regionsCostByNode.Add(costsByPos);
-            }
-
-            //Get all values
-            for (int i = 0; i < regionsCostByNode.Count; i++)
-            {
-                if (!dictionary.TryGetValue(regionsCostByNode[i].key, out var costs))
-                {
-                    Debug.LogError("Key not found: " + regionsCostByNode[i].key + " ID: " + i);
-                    continue;
-                }
-
-                foreach (int IDs in costs.Keys)
-                {
-                    SerializableKeyValue<int, float> costsByID;
-                    costsByID = new SerializableKeyValue<int, float>();
-                    costsByID.key = IDs;
-                    costs.TryGetValue(costsByID.key, out costsByID.value);
-                    regionsCostByNode[i].value.Add(costsByID);
-                }
-            }
-        }
     }
 
     public class PathManager : MonoBehaviour
@@ -134,8 +68,6 @@ namespace IA.Pathfinding
         [SerializeField] GameObject minePrefab;
         [SerializeField, Min(1)] int mineCount = 5;
         [SerializeField] MineSettings mineSettings;
-        [Header("Terrain Recalculation")]
-        [SerializeField, Min(0f)] float terrainRecalcMaxDuration = 0.1f;
 
         string dataRoot;
 
@@ -153,9 +85,13 @@ namespace IA.Pathfinding
         //Unity Events
         void Awake()
         {
+            // Save files live in Unity's persistent data folder.
+            // If loading fails for any reason, the map is generated from scratch below.
             dataRoot = System.IO.Path.Combine(Application.persistentDataPath);
             shouldLoadSavedData = useSavedData && TryLoadAndValidateData();
 
+            // Each grid is either restored from compatible saved cells or rebuilt from the scene.
+            // The pathfinder will always rebuild Voronoi data from current mines after this.
             for (int i = 0; i < grids.Length; i++)
             {
                 if (shouldLoadSavedData)
@@ -164,27 +100,29 @@ namespace IA.Pathfinding
                     grids[i].Set(gridTransform, gridWorldSize);
             }
 
+            // Mines must exist before pathfinders are initialized because mines become Voronoi sites.
             BuildMines(shouldLoadSavedData);
 
+            // Saved region/cost data no longer exists.
+            // Every layer creates its on-demand Voronoi from the current grid and mines.
             for (int i = 0; i < pathfinders.Length; i++)
             {
                 pathfinders[i].SetPointsOfInterest(BuildPointsOfInterestFromMines());
-
-                if (shouldLoadSavedData)
-                    pathfinders[i].Load(grids[i], layerData[i].GetDictionary());
-                else
-                    pathfinders[i].Set(grids[i]);
+                pathfinders[i].Set(grids[i]);
             }
         }
         void Start()
         {
-            //Try to save data on start, if it needs to
-            if (!saveData) return;
+            // Saving is optional because the scene can always rebuild its grid and Voronoi data.
+            if (!saveData)
+                return;
 
             for (int i = 0; i < grids.Length; i++)
             {
                 string dataPath = System.IO.Path.Combine(dataRoot, "_GridLayer_" + i + ".bin");
 
+                // Only durable map and mine data is saved.
+                // Voronoi regions are intentionally recalculated at runtime on demand.
                 LayerData newData = new LayerData();
                 newData.isSetted = true;
                 newData.grid = grids[i].grid;
@@ -197,31 +135,23 @@ namespace IA.Pathfinding
                 for (int j = 0; j < mines.Count; j++)
                     newData.mineIDs.Add(mines[j].id);
 
-                newData.SetDictionary(pathfinders[i].GetRegionsCostByNode());
-
                 FileManager<LayerData>.SaveDataToFile(newData, dataPath);
-            }
-        }
-        void Update()
-        {
-            float now = Time.realtimeSinceStartup;
-            for (int i = 0; i < pathfinders.Length; i++)
-            {
-                pathfinders[i].TickTerrainRecalculation(now);
-                if (pathfinders[i].CommitPendingTerrainVoronoi())
-                    OnVoronoiLayerCommitted?.Invoke(i);
             }
         }
         void OnDrawGizmos()
         {
+            // Walkability and terrain weight
             if (grids.Length > 0)
                 grids[gizmosIndex].DrawGizmos(gridTransform, gridWorldSize);
 
+            // Voronoi regions
             if (pathfinders.Length > 0)
                 pathfinders[gizmosIndex].DrawGizmos();
         }
         void OnValidate()
         {
+            // Keep the debug index inside the serialized array bounds.
+            // This prevents editor gizmo calls from indexing outside the configured layers.
             if(gizmosIndex >= grids.Length)
                 gizmosIndex = grids.Length - 1;
         }
@@ -232,6 +162,8 @@ namespace IA.Pathfinding
         /// </summary>
         public void QueueAllTerrainCellsForRescan()
         {
+            // Every layer gets its own set so duplicate cells are naturally merged.
+            // This keeps the later refresh pass small and unordered.
             for (int layer = 0; layer < grids.Length; layer++)
             {
                 //Make sure all layers have a queue
@@ -249,6 +181,8 @@ namespace IA.Pathfinding
         }
         public void SetCellsForRecalculation()
         {
+            // If mine generation failed earlier, the safest recovery is to rebuild all grids and sites.
+            // Agents are told about the whole-map refresh after the new pathfinders are ready.
             if (generationFailed)
             {
                 for (int i = 0; i < grids.Length; i++) 
@@ -266,12 +200,16 @@ namespace IA.Pathfinding
                 OnWholeMapRegen?.Invoke();
             }
             
+            // No queued cells means no grid data changed.
+            // Without changed grid data, there is no Voronoi refresh or reroute event to send.
             if (queuedTerrainChangesByLayer.Count <= 0)
                 return;
 
             foreach (KeyValuePair<int, HashSet<Vector2Int>> entry in queuedTerrainChangesByLayer)
             {
                 int layer = entry.Key;
+                if (layer < 0 || layer >= grids.Length || layer >= pathfinders.Length)
+                    continue;
                 
                 //Use hash set as it's much faster than list for an unordered collection
                 //( O(1) vs O(n) )
@@ -286,23 +224,38 @@ namespace IA.Pathfinding
                 if (deltas.Count <= 0)
                     continue;
 
-                pathfinders[layer].RequestTerrainRecalculation(deltas, terrainRecalcMaxDuration);
+                // Terrain changes are already applied to the grid.
+                // Voronoi now refreshes synchronously and agents are redirected right away.
+                if (pathfinders[layer].RecalculateVoronoiAfterTerrainChange(deltas))
+                    OnVoronoiLayerCommitted?.Invoke(layer);
             }
 
             queuedTerrainChangesByLayer.Clear();
         }
         bool TryLoadAndValidateData()
         {
+            // Each layer has its own saved grid file.
+            // Any missing, old, or invalid file makes the whole map regenerate cleanly.
             layerData = new LayerData[grids.Length];
             for (int i = 0; i < grids.Length; i++)
             {
                 string dataPath = System.IO.Path.Combine(dataRoot, "_GridLayer_" + i + ".bin");
-                layerData[i] = FileManager<LayerData>.LoadDataFromFile(dataPath);
+                try
+                {
+                    layerData[i] = FileManager<LayerData>.LoadDataFromFile(dataPath);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("Saved pathfinding/mine data could not be loaded. Recalculating from scratch. " + exception.Message);
+                    return false;
+                }
 
-                if (!layerData[i].isSetted)
+                if (!layerData[i].isSetted || layerData[i].grid == null)
                     return false;
             }
 
+            // Even when a file loads, its shape must match the current scene settings.
+            // Incompatible saves are ignored so runtime data stays coherent.
             for (int i = 0; i < grids.Length; i++)
                 if (!IsSaveCompatibleWithCurrent(layerData[i], grids[i]))
                 {
@@ -314,6 +267,8 @@ namespace IA.Pathfinding
         }
         bool IsSaveCompatibleWithCurrent(LayerData savedData, Grid.PathGrid currentGrid)
         {
+            // Grid dimensions and mine settings are the contract for saved map data.
+            // If any of these change, old cells and mine ids may point at the wrong places.
             int expectedCellCount = GetExpectedCellCount(currentGrid);
             int expectedGridHeight = GetExpectedGridHeight(currentGrid);
 
@@ -329,6 +284,8 @@ namespace IA.Pathfinding
         }
         void BuildMines(bool fromSavedData)
         {
+            // Mine objects are rebuilt as scene objects every time the manager starts.
+            // Saved data only decides their positions and ids.
             mines.Clear();
 
             if (minePrefab == null)
@@ -347,6 +304,8 @@ namespace IA.Pathfinding
         }
         void GenerateRandomMines()
         {
+            // Random mine placement only uses walkable cells from the first layer.
+            // The same mines are then shared as points of interest for all pathfinder layers.
             List<Vector2Int> validPositions = new List<Vector2Int>();
             Grid.PathNode[,] gridNodes = grids[0].grid;
             for (int x = 0; x < grids[0].gridSize.x; x++)
@@ -380,6 +339,8 @@ namespace IA.Pathfinding
         }
         void InstantiateMinesFromIDs(List<int> mineIDs)
         {
+            // Saved ids are encoded grid positions.
+            // Rebuilding from ids makes saved mines land on the same cells.
             if (mineIDs == null) return;
 
             for (int i = 0; i < mineIDs.Count; i++)
@@ -390,9 +351,13 @@ namespace IA.Pathfinding
         }
         void SpawnMine(Vector2Int gridPos, int forcedId = int.MinValue)
         {
+            // Mine spawning only accepts cells that exist on the base grid.
+            // Invalid saved ids are ignored instead of creating unreachable POIs.
             if (gridPos.x < 0 || gridPos.x >= grids[0].gridSize.x) return;
             if (gridPos.y < 0 || gridPos.y >= grids[0].gridSize.y) return;
 
+            // Mine ids are stable grid ids unless a saved id is being restored.
+            // That keeps save/load and exact POI lookup aligned.
             int id = forcedId == int.MinValue ? GridPosToId(gridPos, grids[0].gridSize.y) : forcedId;
             Transform mineTransform = Instantiate(minePrefab).transform;
             mineTransform.parent = transform;
@@ -407,6 +372,8 @@ namespace IA.Pathfinding
         }
         List<PointOfInterest> BuildPointsOfInterestFromMines()
         {
+            // Pathfinders consume mines through PointOfInterest objects.
+            // The same mine transform supplies both world position and stable id.
             List<PointOfInterest> points = new List<PointOfInterest>(mines.Count);
             for (int i = 0; i < mines.Count; i++)
             {
@@ -422,34 +389,45 @@ namespace IA.Pathfinding
         }
         int GetExpectedCellCount(Grid.PathGrid grid)
         {
+            // The saved grid stores a rectangular array of cells.
+            // Cell count checks whether the current node size still creates the same amount.
             int width = Mathf.RoundToInt(gridWorldSize.x / grid.NodeDiameter);
             int height = Mathf.RoundToInt(gridWorldSize.y / grid.NodeDiameter);
             return width * height;
         }
         int GetExpectedGridHeight(Grid.PathGrid grid)
         {
+            // Grid ids encode y using the grid height.
+            // If this changes, saved mine ids decode to different cells.
             return Mathf.RoundToInt(gridWorldSize.y / grid.NodeDiameter);
         }
         public int GridPosToId(Vector2Int gridPos, int gridHeight)
         {
+            // The id flattens a grid coordinate into one stable integer.
+            // It is used for saved mines and exact POI lookup.
             return gridPos.x * gridHeight + gridPos.y;
         }
         public Vector2Int IdToGridPos(int id, int gridHeight)
         {
+            // This reverses GridPosToId using the same grid height.
+            // Saved mine ids become grid coordinates again during load.
             int x = id / gridHeight;
             int y = id % gridHeight;
             return new Vector2Int(x, y);
         }
         public VoronoiAStarPathfinder GetPathfinder(int index)
         {
+            // Agents ask the manager for the layer-specific pathfinder they use.
             return pathfinders[index];
         }
         public float GetNodeDiameter(int index)
         {
+            // Movement states use node diameter as their arrival threshold.
             return grids[index].NodeDiameter;
         }
         public LayerMask GetUnwalkableMask(int index)
         {
+            // Flocking uses the same obstacle mask as the pathfinding grid.
             if (index < 0 || index >= grids.Length)
                 return 0;
 
@@ -457,10 +435,13 @@ namespace IA.Pathfinding
         }
         public Vector2Int GetGridPos(Vector3 worldPos, int index)
         {
+            // World positions are resolved through the selected layer's grid.
             return grids[index].NodeFromWorldPoint(worldPos).gridPos;
         }
         public void RemovePointOfInterest(Vector2Int gridPos, int layer)
         {
+            // Removing by cell first asks that layer which active region owns the cell.
+            // The id-based removal then updates every pathfinder layer.
             int poiIndex;
             poiIndex = pathfinders[layer].FindPointRegion(gridPos);
 
@@ -468,17 +449,34 @@ namespace IA.Pathfinding
         }
         public void RemovePointOfInterest(int id, int layer)
         {
+            // A depleted mine must disappear from every pathfinder layer.
+            // Each layer that changed sends an immediate reroute event to its agents.
             for (int i = 0; i < pathfinders.Length; i++)
             {
-                pathfinders[i].RemovePointOfInterest(id);
+                if (pathfinders[i].RemovePointOfInterest(id))
+                    OnVoronoiLayerCommitted?.Invoke(i);
             }
+        }
+        public void UpdatePointsOfInterest(List<int> pointIds, int layer)
+        {
+            // Some layers only use a subset of all known mines as active destinations.
+            // Updating through the manager keeps the Voronoi refresh and reroute event together.
+            if (layer < 0 || layer >= pathfinders.Length)
+                return;
+
+            // The pathfinder reports whether its active site set really changed.
+            // Agents are redirected only when the closest-site answers may be different.
+            if (pathfinders[layer].UpdatePointsOfInterest(pointIds))
+                OnVoronoiLayerCommitted?.Invoke(layer);
         }
         public MineSettings GetMineSettings()
         {
+            // AgentManager copies these values into runtime mine state.
             return mineSettings;
         }
         public List<Mine> GetRuntimeMines()
         {
+            // The runtime mine list is shared so AgentManager can mirror mine state.
             return mines;
         }
     }
