@@ -99,43 +99,46 @@ namespace IA.Pathfinding.Voronoi
         }
 
         public void CalculateVoronoi()
-                {
-                    // Every full rebuild creates a new version. Nodes keep the version number of
-                    // their cached closest site, so old answers become stale automatically.
-                    voronoiVersion++;
-                    
-                    // The site dictionary is rebuilt first so every later step can use clean lookups.
-                    validSites.Clear();
-                    sitesByPoi.Clear();
-        
-                    for (int i = 0; i < sites.Length; i++)
-                    {
-                        PointOfInterest poi = sites[i];
-                        if (poi == null) continue;
-        
-                        VoronoiSite site = new VoronoiSite(poi);
-                        sitesByPoi.TryAdd(poi, site);
-                        validSites.Add(site);
-                    }
-        
-                    // Get the midpoint to every site.
-                    for (int i = 0; i < validSites.Count; i++)
-                    {
-                        VoronoiSite site1 = validSites[i];
-                        for (int j = i + 1; j < validSites.Count; j++)
-                            EnsureMidpointBetweenSites(site1, validSites[j]);
-                    }
-        
-                    RemoveInvalidMidpoints();
-        
-                    // Terrain movement is applied after all midpoint pairs have passed the Euclidean radius test.
-                    // The polygon builder can then use the final, terrain-adjusted midpoint positions.
-                    ApplyTerrainWeightsToValidMidpoints();
-        
-                    // The temporary polygon is assembled from valid midpoint positions.
-                    // The later vertex stage will replace this with shared vertices and terrain movement.
-                    RebuildSitePolygons();
-                }
+        {
+            // Every full rebuild creates a new version. Nodes keep the version number of
+            // their cached closest site, so old answers become stale automatically.
+            voronoiVersion++;
+
+            // The site dictionary is rebuilt first so every later step can use clean lookups.
+            validSites.Clear();
+            sitesByPoi.Clear();
+
+            for (int i = 0; i < sites.Length; i++)
+            {
+                PointOfInterest poi = sites[i];
+                if (poi == null) continue;
+
+                VoronoiSite site = new VoronoiSite(poi);
+                sitesByPoi.TryAdd(poi, site);
+                validSites.Add(site);
+            }
+
+            // Get the midpoint to every site.
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site1 = validSites[i];
+                for (int j = i + 1; j < validSites.Count; j++)
+                    EnsureMidpointBetweenSites(site1, validSites[j]);
+            }
+
+            RemoveInvalidMidpoints();
+
+            // Terrain movement is applied after all valid midpoint pairs have been found
+            ApplyTerrainWeightsToValidMidpoints();
+
+            //Once the midpoints have been moved, build site polygons
+            List<Vector2> availableMapCorners = CreateMapRectanglePolygon();
+            for (int i = 0; i < validSites.Count; i++)
+            {
+                VoronoiSite site = validSites[i];
+                site.polygonVertices = BuildPolygonForSite(site, availableMapCorners);
+            }
+        }
         
         public Vector2Int GetClosestSite(Vector2Int nodeGridPosition)
         {
@@ -191,16 +194,6 @@ namespace IA.Pathfinding.Voronoi
             return fallbackSite.gridPos;
         }
 
-        void RebuildSitePolygons()
-        {
-            List<Vector2> availableMapCorners = CreateMapRectanglePolygon();
-            for (int i = 0; i < validSites.Count; i++)
-            {
-                VoronoiSite site = validSites[i];
-                site.polygonVertices = BuildPolygonForSite(site, availableMapCorners);
-            }
-        }
-
         VoronoiMidpoint CalculateMidpointBetweenSites(VoronoiSite siteA, VoronoiSite siteB)
         {
             Vector2 siteAPos = GetSiteGridPosition(siteA);
@@ -228,10 +221,6 @@ namespace IA.Pathfinding.Voronoi
                 polygon.Add(midpoint.pos);
 
             AddBoundaryVertices(site, polygon, availableMapCorners);
-
-            // Sorting by angle turns the loose set of points into a drawable loop around the site.
-            // This is a temporary shape until the shared-vertex stage builds the real boundary graph.
-            SortPolygonVerticesAroundSite(site, polygon);
 
             return polygon;
         }
@@ -419,28 +408,13 @@ namespace IA.Pathfinding.Voronoi
             return true;
         }
 
-        void ApplyTerrainWeightsToValidMidpoints(VoronoiSite singleSite = null)
+        void ApplyTerrainWeightsToValidMidpoints()
         {
             if (nodeGrid == null)
                 return;
 
             HashSet<VoronoiMidpoint> checkedMidpoints = new HashSet<VoronoiMidpoint>();
-
-            // A partial update passes one site, while a full rebuild walks every valid site.
-            // In both cases the hash set keeps a shared midpoint from being moved twice.
-            if (singleSite != null)
-            {
-                foreach (VoronoiMidpoint midpoint in singleSite.midpointsByOtherSite.Values)
-                {
-                    if (midpoint == null || !checkedMidpoints.Add(midpoint))
-                        continue;
-
-                    ApplyTerrainShiftToMidpoint(midpoint);
-                }
-
-                return;
-            }
-
+            
             for (int i = 0; i < validSites.Count; i++)
             {
                 VoronoiSite site = validSites[i];

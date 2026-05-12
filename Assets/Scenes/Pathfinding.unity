@@ -38,7 +38,6 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028352, g: 0.22571376, b: 0.30692244, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -173,7 +172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gridTransform: {fileID: 1413446046}
-  gridWorldSize: {x: 100, y: 100}
+  gridWorldSize: {x: 117, y: 111}
   grids:
   - unwalkableMask:
       serializedVersion: 2
@@ -227,11 +226,11 @@ MonoBehaviour:
     - {r: 0.31248856, g: 1, b: 0, a: 0.4392157}
     - {r: 1, g: 0.3872052, b: 0, a: 0.4392157}
   useSavedData: 0
-  saveData: 0
+  saveData: 1
   minePrefab: {fileID: 3390472241950091475, guid: 7cc5e9c857290fc47af95fddb553c4d3, type: 3}
-  mineCount: 10
+  mineCount: 23
   mineSettings:
-    minerals: 60
+    minerals: 180
     initialFood: 15
   gizmosIndex: 0
 --- !u!1 &161096330
@@ -655,8 +654,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 312612165}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.32, y: 1, z: -5.677}
-  m_LocalScale: {x: 1, y: 1, z: 3.0395665}
+  m_LocalPosition: {x: -13.1, y: 1, z: -40.5}
+  m_LocalScale: {x: 5.1012, y: 5.1012, z: 15.505437}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 791552525}
@@ -832,8 +831,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 631127154}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.3928, y: 1, z: 3.8058}
-  m_LocalScale: {x: 2.4900522, y: 1, z: 1.0664101}
+  m_LocalPosition: {x: 29.8, y: 1, z: 26.2}
+  m_LocalScale: {x: 21.571821, y: 8.6632, z: 9.238524}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 791552525}
@@ -1592,7 +1591,7 @@ Transform:
   m_GameObject: {fileID: 937312063}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0.1, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2.4407, y: 2.4407, z: 2.4407}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2020008470}
@@ -1728,8 +1727,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 964453642}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -5.73, y: 1, z: -0.66}
-  m_LocalScale: {x: 1, y: 1, z: 1.8735}
+  m_LocalPosition: {x: 31.9, y: 1, z: -22.3}
+  m_LocalScale: {x: 9.2996, y: 9.2996, z: 17.4228}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 791552525}
@@ -1973,6 +1972,7 @@ Canvas:
   m_OverrideSorting: 0
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
@@ -2051,8 +2051,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1013681626}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 3.78, y: 1, z: 4.8061}
-  m_LocalScale: {x: 5.089783, y: 1, z: 2.4986417}
+  m_LocalPosition: {x: 4.4, y: 1, z: 21}
+  m_LocalScale: {x: 15.662832, y: 2.3435, z: 5.8555665}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 791552525}
@@ -2625,14 +2625,14 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1441216352}
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.57, y: 1, z: 0.5467}
-  m_LocalScale: {x: 1, y: 1, z: 1.8735}
+  m_LocalRotation: {x: -0, y: 0.19891071, z: -0, w: 0.9800176}
+  m_LocalPosition: {x: -23.2, y: 1, z: -3.6}
+  m_LocalScale: {x: 4.825, y: 1, z: 14.007911}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 791552525}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 22.947, z: 0}
 --- !u!65 &1441216354
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -2906,6 +2906,7 @@ Canvas:
   m_OverrideSorting: 0
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
+  m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0

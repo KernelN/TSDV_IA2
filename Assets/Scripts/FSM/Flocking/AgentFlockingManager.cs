@@ -100,7 +100,7 @@ namespace IA.FSM.Flocking
             for (int i = 0; i < agents.Count; i++)
                 output.Add(agents[i].plannedPos);
 
-            Dictionary<Vector2Int, List<int>> cells = BuildSpatialHash(agents, settings.spatialHashCellSize);
+            Dictionary<Vector2Int, List<int>> cells = BuildOctree(agents, settings.spatialHashCellSize);
             float alignmentDistSqr = settings.alignmentDist * settings.alignmentDist;
             float cohesionDistSqr = settings.cohesionDist * settings.cohesionDist;
             float separationDistSqr = settings.separationDist * settings.separationDist;
@@ -422,7 +422,13 @@ namespace IA.FSM.Flocking
             return obstacles;
         }
 
-        static Dictionary<Vector2Int, List<int>> BuildSpatialHash(IReadOnlyList<AgentFlockingSnapshot> agents, float cellSize)
+        /// <summary>
+        /// Subdivision of space (grid) into smallers cells with content inside, to a minimum cell size
+        /// </summary>
+        /// <param name="agents"></param>
+        /// <param name="cellSize"></param>
+        /// <returns></returns>
+        static Dictionary<Vector2Int, List<int>> BuildOctree(IReadOnlyList<AgentFlockingSnapshot> agents, float cellSize)
         {
             Dictionary<Vector2Int, List<int>> cells = new Dictionary<Vector2Int, List<int>>();
             for (int i = 0; i < agents.Count; i++)

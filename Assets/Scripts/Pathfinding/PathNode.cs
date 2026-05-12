@@ -14,7 +14,7 @@ namespace IA.Pathfinding.Grid
         public Universal.FileManaging.Vec2Int gridPos;
         public int weight;
         public bool hasClosestVoronoiSite;
-        public Vector2Int closestVoronoiSiteGridPos;
+        public Universal.FileManaging.Vec2Int closestVoronoiSiteGridPos;
         public int closestVoronoiVersion;
 
         public List<PathNode> neighbours = new List<PathNode>();

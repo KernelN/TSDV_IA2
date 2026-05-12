@@ -13,9 +13,7 @@ namespace IA.FSM.Miner
         GoToDeposit,
         Deposit,
         GoToSafePlace,
-        Hide,
-
-        _count
+        Hide
     }
 
     public enum Flags
@@ -29,9 +27,7 @@ namespace IA.FSM.Miner
         OnMineEmpty,
         OnEmergency,
 
-        OnMapUpdated,
-
-        _count
+        OnMapUpdated
     }
 
     [Serializable]
@@ -64,7 +60,7 @@ namespace IA.FSM.Miner
             pos = transform.position;
             nextPos = pos;
 
-            fsm = new FSM((int)States._count, (int)Flags._count);
+            fsm = new FSM(Enum.GetValues(typeof(States)).Length, Enum.GetValues(typeof(Flags)).Length);
 
             fsm.SetRelation((int)States.Idle, (int)Flags.OnMapUpdated, (int)States.GoToMine);
 

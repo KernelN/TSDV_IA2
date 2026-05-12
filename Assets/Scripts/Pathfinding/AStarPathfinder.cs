@@ -184,7 +184,7 @@ namespace IA.Pathfinding.AStar
             int dstY = Mathf.Abs(nodeA.gridPos.y - nodeB.gridPos.y);
 
             //The lesser distance will be made diagonally
-            //Moving diagonally costs 14
+            //Moving diagonally costs 14.142 (the line connecting vertices is the hypotenuse of the tri)
             //Moving horizontally or vertically costs 10
 
             if (dstX > dstY)
