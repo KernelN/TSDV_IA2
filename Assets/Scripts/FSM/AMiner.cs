@@ -72,6 +72,9 @@ namespace IA.FSM.Miner
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMineEmpty, (int)States.GoToMine);
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMoveFailed, (int)States.GoToDeposit);
             fsm.SetRelation((int)States.GoToMine, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            // A map update while travelling should restart this same movement state.
+            // Re-entering the state makes FollowPathState calculate a fresh path from the miner's current cell.
+            fsm.SetRelation((int)States.GoToMine, (int)Flags.OnMapUpdated, (int)States.GoToMine);
 
             fsm.SetRelation((int)States.Mine, (int)Flags.OnInventoryFull, (int)States.GoToDeposit);
             fsm.SetRelation((int)States.Mine, (int)Flags.OnHungry, (int)States.Eat);
@@ -85,12 +88,18 @@ namespace IA.FSM.Miner
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnNearTarget, (int)States.Deposit);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMoveFailed, (int)States.Idle);
             fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
+            // Deposit travel has a fixed destination, but the route can still change when terrain changes.
+            // The self-transition keeps the destination and refreshes the path.
+            fsm.SetRelation((int)States.GoToDeposit, (int)Flags.OnMapUpdated, (int)States.GoToDeposit);
 
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnInventoryEmpty, (int)States.GoToMine);
             fsm.SetRelation((int)States.Deposit, (int)Flags.OnEmergency, (int)States.GoToSafePlace);
 
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnNearTarget, (int)States.Hide);
             fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMoveFailed, (int)States.Idle);
+            // Emergency travel also needs to respond to a changed map.
+            // Re-entering this state redirects the miner without changing its emergency intent.
+            fsm.SetRelation((int)States.GoToSafePlace, (int)Flags.OnMapUpdated, (int)States.GoToSafePlace);
 
             Action<Vector3> OnGotNewPos = newPos =>
                 nextPos = newPos;

@@ -40,7 +40,6 @@ namespace IA.Pathfinding.Grid
         LayerMask terrainsMask;
         Dictionary<int, int> terrainsDictionary;
         [Header("DEBUG")]
-        [SerializeField] Transform player;
         [SerializeField, Min(1)] int maxNodeWeight = 100;
         [SerializeField, Range(0.001f, 1)] float nodeHeight = 0.5f;
 
@@ -78,67 +77,36 @@ namespace IA.Pathfinding.Grid
         }
         public void DrawGizmos(Transform gridT, Vector2Int gridWorldSize)
         {
-            //Draw grid
+            // The wire cube gives the scene view a simple boundary for the grid.
+            // The inner normal cells are not drawn because they add a lot of noise.
             Vector3 worldSize = new Vector3(gridWorldSize.x, 1, gridWorldSize.y);
             Gizmos.DrawWireCube(gridT.position, worldSize);
 
-            //If grid is not initialized, draw scheme of nodes
+            // If the grid has not been created yet, there are no special cells to show.
+            // Returning here keeps editor gizmos cheap before play mode initializes the data.
             if (grid == null)
-            {
-                Gizmos.color = Color.gray;
-                Vector3 lineStart;
-                Vector3 lineEnd;
-                Vector3 worldBotLeft = gridT.position;
-                worldBotLeft.y = gridT.localScale.y * .55f;
-                worldBotLeft -= Vector3.right * gridWorldSize.x / 2;
-                worldBotLeft -= Vector3.forward * gridWorldSize.y / 2;
-                for (int x = 0; x <= gridWorldSize.x / (NodeDiameter); x++)
-                {
-                    lineStart = worldBotLeft;
-                    lineEnd = worldBotLeft;
-
-                    float xPos = x * NodeDiameter;
-                    lineStart += new Vector3(xPos, 0, 0);
-                    lineEnd += new Vector3(xPos, 0, gridWorldSize.y);
-
-                    Gizmos.DrawLine(lineStart, lineEnd);
-                }
-
-                for (int y = 0; y <= gridWorldSize.y / (NodeDiameter); y++)
-                {
-                    lineStart = worldBotLeft;
-                    lineEnd = worldBotLeft;
-
-                    float yPos = y * NodeDiameter;
-                    lineStart += new Vector3(0, 0, yPos);
-                    lineEnd += new Vector3(gridWorldSize.x, 0, yPos);
-
-                    Gizmos.DrawLine(lineStart, lineEnd);
-                }
-
                 return;
-            }
 
-            //Draw nodes
+            // The first terrain is treated as the normal cost of the map.
+            // Only cells that differ from this baseline, or cannot be walked on, are special.
+            int defaultTerrainWeight = GetDefaultTerrainWeight();
             float nodeSize = NodeDiameter * .9f;
             Vector3 nodeWorldSize = new Vector3(nodeSize, nodeHeight, nodeSize);
-            PathNode playerNode = null;
-            if (player)
-                playerNode = NodeFromWorldPoint(player.position);
 
             for (int x = 0; x < gridSize.x; x++)
             {
                 for (int y = 0; y < gridSize.y; y++)
                 {
                     PathNode node = grid[x, y];
+                    if (!IsSpecialGizmoCell(node, defaultTerrainWeight))
+                        continue;
 
-                    if (node == playerNode)
-                        Gizmos.color = Color.cyan;
-                    else if (!node.walkable)
+                    // Blocked cells are always shown in red so obstacles are easy to find.
+                    // Walkable special cells keep the existing white-to-black weight scale.
+                    if (!node.walkable)
                         Gizmos.color = Color.red;
                     else
-                        Gizmos.color = Color.Lerp(Color.white, Color.black,
-                            (float)node.weight / maxNodeWeight);
+                        Gizmos.color = GetWeightedGizmoColor(node.weight);
 
                     Gizmos.DrawCube(node.worldPos, nodeWorldSize);
                 }
@@ -216,6 +184,36 @@ namespace IA.Pathfinding.Grid
             }
 
             return deltas;
+        }
+        int GetDefaultTerrainWeight()
+        {
+            // The first terrain is the regular ground cost used as the visual baseline.
+            // If the terrain list is empty, zero keeps the gizmo code safe in the editor.
+            if (terrains == null || terrains.Length == 0 || terrains[0] == null)
+                return 0;
+
+            return terrains[0].weight;
+        }
+        bool IsSpecialGizmoCell(PathNode node, int defaultTerrainWeight)
+        {
+            // Missing nodes cannot be drawn, so they are ignored.
+            // This protects the scene view from partially loaded saved data.
+            if (node == null)
+                return false;
+
+            // Unwalkable cells are special even when their stored weight is the default.
+            if (!node.walkable)
+                return true;
+
+            // Walkable cells are special only when their cost differs from normal terrain.
+            return node.weight != defaultTerrainWeight;
+        }
+        Color GetWeightedGizmoColor(int nodeWeight)
+        {
+            // The color scale stays the same as the original gizmo view.
+            // Higher weights move toward black, while lower weights stay closer to white.
+            float weightPercent = Mathf.Clamp01((float)nodeWeight / maxNodeWeight);
+            return Color.Lerp(Color.white, Color.black, weightPercent);
         }
         void CreateGrid()
         {

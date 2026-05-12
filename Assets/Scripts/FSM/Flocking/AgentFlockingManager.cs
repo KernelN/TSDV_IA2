@@ -21,7 +21,7 @@ namespace IA.FSM.Flocking
 
         [Header("Safety / Performance")]
         [Min(0.01f)] public float minSpacing;
-        [Min(0f)] public float maxSteer;
+        [Min(0.0001f)] public float maxSteer;
         [Min(0.1f)] public float spatialHashCellSize;
 
         public AgentFlockingSettings ClampValues()
@@ -121,17 +121,17 @@ namespace IA.FSM.Flocking
                 List<int> candidates = GetNeighbourCandidatesFromSpatialHash(agent.currentPos, cells, settings.spatialHashCellSize);
                 List<NearbyAgentData> nearbyAgents = GetInsideRadiusAgents(i, agents, candidates, maxNeighbourDistSqr);
 
-                Vector2 alignment = Alignment(agents, nearbyAgents, alignmentDistSqr);
+                Vector2 alignment = Alignment(direction, agents, nearbyAgents, alignmentDistSqr);
                 Vector2 cohesion = Cohesion(agent, agents, nearbyAgents, cohesionDistSqr);
-                Vector2 separation = Separation(i, nearbyAgents, settings, separationDistSqr);
+                Vector2 separation = Separation(nearbyAgents, settings, separationDistSqr);
                 Vector2 obstacle = Obstacle(agent.currentPos, settings, obstacleMask, obstacleBuffer);
 
                 Vector2 ACS =
                     direction + //Direction to target, then modify direction towards...
-                    alignment * settings.alignmentMod + //...avg speed of all neighbours
-                    cohesion * settings.cohesionMod + //...avg center of all neighbours
-                    separation * settings.separationMod + //...opposite dir to avg center of all neighbours
-                    obstacle * settings.obstacleMod; //...opposite dir to avg center of all close obstacles
+                    alignment * settings.alignmentMod + //...avg speed of all neighbors
+                    cohesion * settings.cohesionMod + //...avg center of all neighbors
+                    separation * settings.separationMod + //...the sum of the disp away from each neighbor
+                    obstacle * settings.obstacleMod; //...the sum of the disp away from each obstacle (if it's already touching the obst, it gets the obst center instead of closest point)
 
                 Vector2 finalDirection = ApplySteering(direction, ACS, settings.maxSteer);
 
@@ -158,8 +158,9 @@ namespace IA.FSM.Flocking
 
         /// <summary>
         /// Average heading of nearby agents.
+        /// Skips agents moving towards very different directions.
         /// </summary>
-        public static Vector2 Alignment(
+        public static Vector2 Alignment(Vector3 agentDir,
             IReadOnlyList<AgentFlockingSnapshot> agents,
             IReadOnlyList<NearbyAgentData> nearbyAgents,
             float alignmentDistSqr)
@@ -179,6 +180,10 @@ namespace IA.FSM.Flocking
 
                 Vector2 neighbourDirection = Direction(neighbour);
                 if (neighbourDirection.sqrMagnitude <= SqrEpsilon)
+                    continue;
+                
+                //If direction leans towards opposite, skip
+                if(Vector2.Dot( neighbourDirection, agentDir ) < 0)
                     continue;
 
                 avg += neighbourDirection;
@@ -228,7 +233,6 @@ namespace IA.FSM.Flocking
         /// Repulsion away from nearby agents to avoid overlap.
         /// </summary>
         public static Vector2 Separation(
-            int sourceAgentIndex,
             IReadOnlyList<NearbyAgentData> nearbyAgents,
             AgentFlockingSettings settings,
             float separationDistSqr)
@@ -241,12 +245,18 @@ namespace IA.FSM.Flocking
                 if (nearby.sqrDistance > separationDistSqr)
                     continue;
 
+                //the further away the other agent is,
+                //the less influence the offset will have
                 float distance = Mathf.Sqrt(Mathf.Max(nearby.sqrDistance, SqrEpsilon));
                 Vector2 away;
-                away = -nearby.offset / distance;
+                away = -nearby.offset / distance; 
 
-                float safeDistance = Mathf.Max(distance, settings.minSpacing);
+                //clamp to minimum safe distance
+                float safeDistance = Mathf.Max(distance, settings.minSpacing); 
+                //gives more weight the closer it is (caps at min safe space)
                 float weight = 1f / safeDistance;
+                
+                // If it is closer than safe dist, add even more weight
                 if (distance < settings.minSpacing)
                     weight += (settings.minSpacing - distance) / settings.minSpacing;
 
@@ -256,8 +266,15 @@ namespace IA.FSM.Flocking
             if (totalRepulsion.sqrMagnitude <= SqrEpsilon)
                 return Vector2.zero;
 
-            float strength = Mathf.Min(totalRepulsion.magnitude, 1f);
-            return totalRepulsion.normalized * strength;
+            ////Makes sure that it is VERY close to other boid,
+            ////it will have a strong separation from it
+            //return totalRepulsion;
+            
+            ////Binds separation strictly to inspector value
+            //return Vector2.ClampMagnitude(totalRepulsion, 1);
+            
+            //Binds separation strictly to inspector value (but allows less value)
+            return Vector2.ClampMagnitude(totalRepulsion, 1);
         }
 
         /// <summary>
@@ -277,21 +294,22 @@ namespace IA.FSM.Flocking
             for (int i = 0; i < nearbyObstacles.Count; i++)
             {
                 Collider obstacle = nearbyObstacles[i];
-                if (obstacle == null)
+                if (!obstacle)
                     continue;
 
                 Vector3 closestPoint = obstacle.ClosestPoint(currentPos);
-                Vector3 toObstacle3 = closestPoint - currentPos;
-                toObstacle3.y = 0f;
-                Vector2 toObstacle = new Vector2(toObstacle3.x, toObstacle3.z);
+                
+                Vector2 toObstacle = FlattenVector(closestPoint - currentPos);
+                
                 float distance = toObstacle.magnitude;
                 Vector2 awayDirection;
 
-                if (distance <= SqrEpsilon)
+                //If boid is ON closest obstacle point,
+                //make calculation with the obstacle center
+                if (distance <= Mathf.Epsilon)
                 {
-                    Vector3 centerOffset3 = obstacle.bounds.center - currentPos;
-                    centerOffset3.y = 0f;
-                    Vector2 centerOffset = new Vector2(centerOffset3.x, centerOffset3.z);
+                    Vector2 centerOffset = FlattenVector(obstacle.bounds.center - currentPos);
+                    
                     if (centerOffset.sqrMagnitude <= SqrEpsilon)
                         continue;
 
@@ -303,15 +321,22 @@ namespace IA.FSM.Flocking
                     awayDirection = -toObstacle / distance;
                 }
 
-                float influence = 1f - Mathf.Clamp01(distance / settings.obstacleDist);
-                repulsion += awayDirection * influence;
+                //The closer it is, the more weight it will have
+                float weight = 1f - Mathf.Clamp01(distance / settings.obstacleDist);
+                repulsion += awayDirection * weight;
             }
 
             if (repulsion.sqrMagnitude <= SqrEpsilon)
                 return Vector2.zero;
 
-            float strength = Mathf.Min(repulsion.magnitude, 1f);
-            return repulsion.normalized * strength;
+            //Clamp to normalized magnitude or less
+            return Vector2.ClampMagnitude(repulsion, 1);
+        }
+
+        static Vector2 FlattenVector(Vector3 vector)
+        {
+            vector.y = 0f;
+            return new Vector2(vector.x, vector.z);
         }
 
         /// <summary>
@@ -415,16 +440,17 @@ namespace IA.FSM.Flocking
             return cells;
         }
 
-        static Vector2 ApplySteering(Vector2 direction, Vector2 combinedDirection, float maxSteer)
+        static Vector2 ApplySteering(Vector2 direction, Vector2 ACS, float maxSteer)
         {
-            if (combinedDirection.sqrMagnitude <= SqrEpsilon)
-                combinedDirection = direction;
+            if (ACS.sqrMagnitude <= SqrEpsilon)
+                ACS = direction;
 
-            Vector2 desiredDirection = combinedDirection.normalized;
+            Vector2 desiredDirection = ACS.normalized;
             Vector2 steer = desiredDirection - direction;
-            float steerMagnitude = steer.magnitude;
-            if (steerMagnitude > maxSteer && steerMagnitude > 0f)
-                steer = steer / steerMagnitude * maxSteer;
+            
+            //If steering more than max, clamp
+            if (steer.sqrMagnitude > maxSteer*maxSteer)
+                steer = steer.normalized * maxSteer;
 
             Vector2 finalDirection = direction + steer;
             if (finalDirection.sqrMagnitude <= SqrEpsilon)

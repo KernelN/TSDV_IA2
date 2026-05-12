@@ -14,18 +14,21 @@ namespace Universal.FileManaging
         }
         public static T LoadDataFromFile(string dataPath)
         {
+            // Missing files are treated as empty data.
+            // The caller can decide whether default data should trigger a regeneration.
             if (!File.Exists(dataPath))
             {
                 UnityEngine.Debug.LogError("Data file not found at path: " + dataPath);
                 return default;
             }
 
+            // The file stream is wrapped in using so invalid or outdated binary data
+            // cannot leave the save file open after deserialization fails.
             BinaryFormatter bf = new BinaryFormatter();
-            FileStream file = File.Open(dataPath, FileMode.Open);
-            T objectToLoad = (T)bf.Deserialize(file);
-            file.Close();
-
-            return objectToLoad;
+            using (FileStream file = File.Open(dataPath, FileMode.Open))
+            {
+                return (T)bf.Deserialize(file);
+            }
         }
         public static void DeleteFile(string dataPath)
         {

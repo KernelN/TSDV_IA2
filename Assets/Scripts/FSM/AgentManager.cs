@@ -361,10 +361,9 @@ namespace IA.FSM
                     regions.Add(region);
             });
 
-            pathManager.GetPathfinder(1).UpdatePointsOfInterest(regions.ToList());
-
-            for (int i = 0; i < caravans.Count; i++)
-                caravans[i].OnMapUpdated();
+            // The manager updates the caravan layer and fires the map-updated event if the active sites changed.
+            // That event redirects caravans that are already travelling.
+            pathManager.UpdatePointsOfInterest(regions.ToList(), 1);
         }
 
         //Event Receivers

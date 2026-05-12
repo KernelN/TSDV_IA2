@@ -13,6 +13,9 @@ namespace IA.Pathfinding.Grid
         public Universal.FileManaging.Vec3 worldPos;
         public Universal.FileManaging.Vec2Int gridPos;
         public int weight;
+        public bool hasClosestVoronoiSite;
+        public Vector2Int closestVoronoiSiteGridPos;
+        public int closestVoronoiVersion;
 
         public List<PathNode> neighbours = new List<PathNode>();
         
@@ -29,6 +32,10 @@ namespace IA.Pathfinding.Grid
             walkable = node.walkable;
             worldPos = node.worldPos;
             gridPos = node.gridPos;
+            weight = node.weight;
+            hasClosestVoronoiSite = node.hasClosestVoronoiSite;
+            closestVoronoiSiteGridPos = node.closestVoronoiSiteGridPos;
+            closestVoronoiVersion = node.closestVoronoiVersion;
         }
     }
 }
